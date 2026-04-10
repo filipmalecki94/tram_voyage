@@ -73,6 +73,10 @@ export function useRoomRejoin(code: string) {
         )('room:rejoin', { token }, resolve);
       },
     );
+    if (res.ok) {
+      const playerIdKey = storageKey.replace('tram:token:', 'tram:playerId:');
+      localStorage.setItem(playerIdKey, res.data.playerId);
+    }
     return res.ok;
   }, [storageKey]);
 

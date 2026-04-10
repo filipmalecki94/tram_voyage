@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useRoom } from '@/lib/use-room';
-import { getSocket } from '@/lib/socket-client';
 
 export default function Page() {
   const router = useRouter();
@@ -29,9 +28,7 @@ export default function Page() {
         setCreateError(res.error);
         return;
       }
-      const { code, token } = res.data;
-      const socket = getSocket();
-      const playerId = socket.id ?? '';
+      const { code, token, playerId } = res.data;
       localStorage.setItem(`tram:token:${code}`, token);
       localStorage.setItem(`tram:playerId:${code}`, playerId);
       router.push(`/room/${code}`);
@@ -50,9 +47,7 @@ export default function Page() {
         setJoinError(res.error);
         return;
       }
-      const { token } = res.data;
-      const socket = getSocket();
-      const playerId = socket.id ?? '';
+      const { token, playerId } = res.data;
       localStorage.setItem(`tram:token:${codeTrimmed}`, token);
       localStorage.setItem(`tram:playerId:${codeTrimmed}`, playerId);
       router.push(`/room/${codeTrimmed}`);

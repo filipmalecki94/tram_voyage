@@ -68,7 +68,8 @@ jobs:
           script: |
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
             cd ~/tramwajarz
+            set -a && source .env && set +a
             docker compose pull
             docker compose up -d
-            sleep 5
-            curl -sf http://127.0.0.1:${TRAM_PORT:-3000}/api/health || (docker compose logs --tail 50 && exit 1)
+            sleep 8
+            curl -sf http://${BIND_IP:-127.0.0.1}:${TRAM_PORT:-3000}/api/health || (docker compose logs --tail 50 && exit 1)

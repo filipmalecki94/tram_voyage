@@ -63,10 +63,8 @@ export default function RoomPage() {
         setJoinError(res.error);
         return;
       }
-      const { token } = res.data;
+      const { token, playerId } = res.data;
       saveToken(token);
-      const socket = getSocket();
-      const playerId = socket.id ?? '';
       localStorage.setItem(`tram:playerId:${code}`, playerId);
       setMyPlayerId(playerId);
     } finally {
