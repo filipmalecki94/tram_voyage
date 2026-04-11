@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/Card';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
@@ -12,15 +13,20 @@ export default function RoomPage() {
   const code = params.code.toUpperCase();
   const router = useRouter();
 
-  const { state, error, emit } = useRoom();
+  const { state, error, emit, connectionStatus } = useRoom();
   const { saveToken, rejoin } = useRoomRejoin(code);
 
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [joinNick, setJoinNick] = useState('');
-  const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [myLastCard, setMyLastCard] = useState<CardType | null>(null);
+  const [myLastCardKey, setMyLastCardKey] = useState(0);
   const [reconnecting, setReconnecting] = useState(true);
+
+  // Śledzenie poprzedniego statusu połączenia żeby nie pokazywać toastu przy pierwszym connect
+  const prevConnectionStatus = useRef<string | null>(null);
+  // Flaga: czy był kiedykolwiek disconnect po mount (żeby nie rejoinować przy pierwszym connect)
+  const wasDisconnected = useRef(false);
 
   // Na mount: spróbuj rejoin przez token z localStorage
   useEffect(() => {
@@ -29,7 +35,6 @@ export default function RoomPage() {
 
     rejoin().then((ok) => {
       if (ok) {
-        // playerId mógł być zapisany przed wejściem na stronę lub z socket.id
         const pid = localStorage.getItem(`tram:playerId:${code}`);
         if (pid) setMyPlayerId(pid);
       }
@@ -38,12 +43,54 @@ export default function RoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-rejoin po reconnect socket.io
+  useEffect(() => {
+    const socket = getSocket();
+    const handleConnect = () => {
+      if (!wasDisconnected.current) return;
+      wasDisconnected.current = false;
+      rejoin().then((ok) => {
+        if (ok) {
+          const pid = localStorage.getItem(`tram:playerId:${code}`);
+          if (pid) setMyPlayerId(pid);
+        }
+      });
+    };
+    const handleDisconnect = () => {
+      wasDisconnected.current = true;
+    };
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, [code, rejoin]);
+
+  // Toast dla statusu połączenia
+  useEffect(() => {
+    const prev = prevConnectionStatus.current;
+    prevConnectionStatus.current = connectionStatus;
+
+    if (connectionStatus === 'disconnected' || connectionStatus === 'reconnecting') {
+      toast.loading('Wznawianie połączenia…', { id: 'reconn' });
+    } else if (connectionStatus === 'connected' && prev !== null && prev !== 'connected') {
+      toast.success('Połączono', { id: 'reconn' });
+    }
+  }, [connectionStatus]);
+
+  // Toast dla błędów z serwera (event 'error')
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
+
   // Nasłuchuj game:card_drawn żeby śledzić własną ostatnio wyciągniętą kartę
   useEffect(() => {
     const socket = getSocket();
     const handler = (data: { card: CardType; byPlayerId: string }) => {
       if (data.byPlayerId === myPlayerId) {
         setMyLastCard(data.card);
+        setMyLastCardKey((k) => k + 1);
       }
     };
     socket.on('game:card_drawn', handler);
@@ -55,12 +102,17 @@ export default function RoomPage() {
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
     if (nick.length < 2 || nick.length > 16) return;
-    setJoinError(null);
     setJoining(true);
     try {
       const res = await emit('room:join', { code, nick });
       if (!res.ok) {
-        setJoinError(res.error);
+        const msg =
+          res.error === 'no_room'
+            ? 'Pokój nie istnieje lub wygasł.'
+            : res.error === 'room_full'
+              ? 'Pokój jest pełny (maks. 12 graczy).'
+              : 'Nie udało się dołączyć do pokoju.';
+        toast.error(msg);
         return;
       }
       const { token, playerId } = res.data;
@@ -111,6 +163,7 @@ export default function RoomPage() {
             type="text"
             value={joinNick}
             onChange={(e) => setJoinNick(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             placeholder="np. Ala"
             maxLength={16}
             className="h-12 rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
@@ -122,15 +175,6 @@ export default function RoomPage() {
           >
             {joining ? 'Dołączam...' : `Dołącz do pokoju ${code}`}
           </Button>
-          {joinError && (
-            <p className="text-sm text-red-600">
-              {joinError === 'no_room'
-                ? 'Pokój nie istnieje lub wygasł.'
-                : joinError === 'full'
-                  ? 'Pokój jest pełny (maks. 12 graczy).'
-                  : joinError}
-            </p>
-          )}
           <a href="/" className="text-sm text-center text-muted-foreground underline mt-2">
             Wróć do strony głównej
           </a>
@@ -153,13 +197,6 @@ export default function RoomPage() {
 
   return (
     <main className="min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto">
-      {/* Błąd z hosta */}
-      {error && (
-        <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-sm text-center py-2 px-4 z-50">
-          {error}
-        </div>
-      )}
-
       {/* Header */}
       <div className="pt-2">
         <p className="text-xs text-muted-foreground uppercase tracking-widest">Kod pokoju</p>
@@ -239,13 +276,15 @@ export default function RoomPage() {
             </p>
           )}
 
-          {/* Własna ostatnia karta */}
+          {/* Własna ostatnia karta z animacją */}
           <div className="flex flex-col items-center gap-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Twoja ostatnia karta
             </p>
             {myLastCard ? (
-              <Card card={myLastCard} size="lg" />
+              <div key={myLastCardKey} className="card-in">
+                <Card card={myLastCard} size="lg" />
+              </div>
             ) : (
               <p className="text-3xl text-muted-foreground">—</p>
             )}

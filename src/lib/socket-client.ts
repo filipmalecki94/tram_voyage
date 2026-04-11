@@ -8,7 +8,12 @@ export function getSocket(): AppClientSocket {
     throw new Error('getSocket() działa tylko w przeglądarce');
   }
   if (!socket) {
-    socket = io() as AppClientSocket;
+    socket = io(undefined, {
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+    }) as AppClientSocket;
   }
   return socket;
 }

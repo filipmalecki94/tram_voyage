@@ -14,19 +14,35 @@ type Response<E extends keyof ClientToServerEvents> =
     ? R
     : never;
 
+export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
+
 export function useRoom() {
   const [state, setState] = useState<PublicRoomState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
+    () => (typeof window !== 'undefined' && getSocket().connected ? 'connected' : 'disconnected'),
+  );
 
   useEffect(() => {
     const s = getSocket();
     const onState = (rs: PublicRoomState) => setState(rs);
     const onError = (e: { message: string }) => setError(e.message);
+    const onConnect = () => setConnectionStatus('connected');
+    const onDisconnect = () => setConnectionStatus('disconnected');
+    const onReconnectAttempt = () => setConnectionStatus('reconnecting');
+
     s.on('room:state', onState);
     s.on('error', onError);
+    s.on('connect', onConnect);
+    s.on('disconnect', onDisconnect);
+    s.io.on('reconnect_attempt', onReconnectAttempt);
+
     return () => {
       s.off('room:state', onState);
       s.off('error', onError);
+      s.off('connect', onConnect);
+      s.off('disconnect', onDisconnect);
+      s.io.off('reconnect_attempt', onReconnectAttempt);
     };
   }, []);
 
@@ -47,7 +63,7 @@ export function useRoom() {
     [],
   );
 
-  return { state, error, emit };
+  return { state, error, emit, connectionStatus };
 }
 
 export function useRoomRejoin(code: string) {

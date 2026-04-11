@@ -8,13 +8,35 @@
 | **3** | Warstwa realtime (Socket.IO) | [x] |
 | **4** | UI: landing + kontroler telefonu | [x] |
 | **5** | Widok stołu + QR | [x] |
-| **6** | Docker + deploy na mikr.us | [ ] |
-| **7** | Polish + reconnect | [ ] |
+| **6** | Docker + deploy na mikr.us | [x] |
+| **7** | Polish + reconnect | [x] |
 | **8** | Pełne zasady Tramwajarza (iteracja 2) | [ ] |
 
 ## Notatki
 
+### Etap 7 (2026-04-11)
+- **Auto-reconnect:** `socket.io-client` skonfigurowany jawnie (`reconnectionDelay: 500ms`, `reconnectionDelayMax: 3000ms`). `RoomPage` rejestruje listener `socket.on('connect')` z flagą `wasDisconnected` — wywołuje `room:rejoin` tylko przy właściwym reconnect (nie przy pierwszym mount).
+- **Toasty (`sonner`):** `npx shadcn@latest add sonner` → `src/components/ui/sonner.tsx`. `<Toaster richColors position="top-center" />` dodany do `layout.tsx`. Błędy join (`no_room`, `room_full`, fallback) wyświetlane przez `toast.error()`. Status połączenia (`disconnected`/`reconnecting` → `toast.loading`, `connected` po disconnect → `toast.success`) z identyfikatorem `id: 'reconn'` żeby sonner podmieniał zamiast dorzucać kolejne.
+- **Animacja karty:** `@keyframes card-in` + klasa `.card-in` przeniesione do `globals.css` z `prefers-reduced-motion`. Widok stołu reużywa klasy (`className="card-in"` zamiast inline `style + <style>`). Kontroler: `<div key={myLastCardKey} className="card-in">` — `myLastCardKey` inkrementowany przy każdej własnej karcie, co wymusza remount i ponowne odpalenie animacji.
+- **Nowe testy (42/42 zielone):** rejoin po `markDisconnected` flipuje `isConnected`, rejoin po `cleanupStale` zwraca null, rejoin po `leaveRoom` zwraca null (token usunięty).
+- **Decyzje:** brak oddzielnego TTL tokenów (tokeny żyją z pokojem); limit 12 graczy był już zaimplementowany — nie wymagał zmian.
+
 <!-- Aktualizuj po każdym etapie: co zostało zrobione, co odblokowane, decyzje podjęte w trakcie -->
+
+### Etap 6 (2026-04-11)
+- `Dockerfile` multi-stage: `deps` (npm ci) → `builder` (next build + esbuild server.ts → dist/server.js) → `runner` (node:20-alpine, tylko prod deps)
+  - **Decyzja:** zamiast `npx tsc` użyto `esbuild --bundle --packages=external` — szybciej i produkuje jeden plik JS bez potrzeby kopiowania node_modules do dist
+  - `tsx` przeniesiony do devDependencies (runtime `node dist/server.js`, bez tsx)
+- `docker-compose.yml` — serwis `tramwajarz` ciągnie obraz z GHCR (`ghcr.io/$GHCR_OWNER/tram_voyage:latest`), konfigurowany przez `.env` na VPS (BIND_IP, TRAM_PORT, GHCR_OWNER); healthcheck przez `wget /api/health`
+- `src/app/api/health/route.ts` — `GET → { ok: true }` z `force-dynamic`
+- `.github/workflows/deploy.yml` — CI/CD pipeline:
+  1. `test` — npm ci + vitest + tsc --noEmit
+  2. `build-and-push` — docker buildx push do GHCR (tag `latest` + `sha-*`), GHA cache layers
+  3. `deploy` — SSH do VPS: docker login GHCR → `docker compose pull` → `docker compose up -d` → curl healthcheck
+  - **Decyzja:** GHCR zamiast `docker save | ssh` z PLAN.md — CI/CD przez GitHub Actions jest powtarzalny i nie wymaga ręcznych kroków; obraz ~300 MB nie blokuje pipeline dzięki layer cache
+- Fixupy po pierwszym deploy:
+  - VPS musiał się zalogować do GHCR przed `docker compose pull` (token z `$GITHUB_TOKEN` przez `envs:`)
+  - `playerId` zmieniany na UUID generowany przez serwer (`crypto.randomUUID()`) zamiast `socket.id` — socket.id zmienia się po reconnect, UUID-based token przeżywa odświeżenie
 
 ### Etap 5 (2026-04-10)
 - `npm install qrcode` + `@types/qrcode` — generator SVG QR po stronie serwera

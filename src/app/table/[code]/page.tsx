@@ -155,14 +155,9 @@ export default function TablePage() {
                     key={key}
                     className={`transition-all duration-500 ${
                       isNewest
-                        ? 'opacity-100 translate-y-0 scale-105'
+                        ? 'card-in opacity-100 translate-y-0 scale-105'
                         : 'opacity-80 translate-y-0'
                     }`}
-                    style={
-                      isNewest
-                        ? { animation: 'card-in 0.4s ease-out' }
-                        : undefined
-                    }
                   >
                     <Card card={card} size={idx === 0 ? 'lg' : 'md'} />
                   </div>
@@ -195,13 +190,6 @@ export default function TablePage() {
         )}
       </section>
 
-      {/* Globalna animacja */}
-      <style>{`
-        @keyframes card-in {
-          from { opacity: 0; transform: translateY(-20px) scale(1.1); }
-          to   { opacity: 1; transform: translateY(0) scale(1.05); }
-        }
-      `}</style>
     </main>
   );
 }

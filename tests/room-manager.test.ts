@@ -70,6 +70,29 @@ describe('RoomManager', () => {
         rooms.rejoin('00000000-0000-0000-0000-000000000000'),
       ).toBeNull();
     });
+
+    it('rejoin po markDisconnected flipuje isConnected na true', () => {
+      const { state, playerId, token } = rooms.createRoom('Alice');
+      rooms.markDisconnected(playerId, state.code);
+      expect(rooms.getRoom(state.code)?.players[0].isConnected).toBe(false);
+      const result = rooms.rejoin(token);
+      expect(result).not.toBeNull();
+      expect(rooms.getRoom(state.code)?.players[0].isConnected).toBe(true);
+    });
+
+    it('zwraca null po usunięciu pokoju przez cleanupStale', () => {
+      const { token } = rooms.createRoom('Alice');
+      const TWO_HOURS_PLUS_MS = 2 * 60 * 60_000 + 1;
+      rooms.cleanupStale(Date.now() + TWO_HOURS_PLUS_MS);
+      expect(rooms.rejoin(token)).toBeNull();
+    });
+
+    it('zwraca null po leaveRoom — token jest usuwany', () => {
+      const { state, playerId, token } = rooms.createRoom('Alice');
+      rooms.joinRoom(state.code, 'Bob');
+      rooms.leaveRoom(playerId, state.code);
+      expect(rooms.rejoin(token)).toBeNull();
+    });
   });
 
   describe('markDisconnected', () => {

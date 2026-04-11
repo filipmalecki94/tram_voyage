@@ -1,73 +1,53 @@
-# Prompt dla Claude Code — Etap 6
+# Prompt dla Claude Code — Etap 8
 
-Realizujesz **Etap 6** z planu zawartego w `PLAN.md`.
+Realizujesz **Etap 8** z planu zawartego w `PLAN.md`.
 
 ## Treść planu
 
 ```markdown
-## Etap 6 — Docker + deploy na mikr.us
+## Etap 8 — Pełne zasady Tramwajarza (iteracja 2)
 
-**Cel:** publiczny URL, gra dostępna dla znajomych.
+**Cel:** rozszerzyć `GameEngine` do state machine z 4 fazami zgadywania.
 
-**Pliki:**
-- `Dockerfile` — multi-stage:
-  1. `deps` (npm ci)
-  2. `builder` (`next build` + TS compile `server.ts` → `dist/server.js`)
-  3. `runner` (node slim, tylko produkcyjne deps + `.next/standalone` + `dist/`)
-- `docker-compose.yml` — serwis `tramwajarz`, port wewn. 3000, healthcheck
-- Nginx vhost (instrukcja, plik na VPS):
-  ```nginx
-  server {
-    server_name tramwajarz.<mikrus-domena>;
-    location / { proxy_pass http://127.0.0.1:<port>; ... }
-    location /socket.io/ {
-      proxy_http_version 1.1;
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
-      proxy_pass http://127.0.0.1:<port>;
-    }
-  }
-  ```
-- `src/app/api/health/route.ts` — `{ ok: true }`
-
-**Proces deploy** (wykonywany przez agenta `deploy-vps` z Etapu 0):
-1. `docker build -t tramwajarz:latest .`
-2. `docker save tramwajarz:latest | ssh robert193 'docker load'`
-3. `scp docker-compose.yml robert193:~/tramwajarz/`
-4. `ssh robert193 'cd ~/tramwajarz && docker compose up -d'`
-5. `curl https://tramwajarz.<domena>/api/health`
-
-**Weryfikacja:** telefon w sieci komórkowej (nie WiFi!) skanuje QR i gra.
+- `phase: 'color' | 'highLow' | 'insideOutside' | 'suit'`
+- Akcja `guess(playerId, guess)` → aktualizacja fazy / koniec rundy / kara
+- Licznik „łyków" dla graczy
+- Zmiany UI: przyciski zgadywania zamiast samego „Ciągnij"
+- Skill `/game-phase` (z Etapu 0) pomaga w generowaniu kolejnych faz
 ```
 
 ## Kontekst aktualnego stanu
 
-Po Etapie 5 działają:
-- `src/app/page.tsx` — landing z CTA „Stwórz stół" / „Dołącz kodem"
-- `src/app/room/[code]/page.tsx` — pełny kontroler telefonu
-- `src/app/table/[code]/page.tsx` — widok stołu: QR, lista graczy z awatarkami, stos kart, animacja nowej karty
-- `src/app/api/qr/[code]/route.ts` — SVG QR z parametrem `?url=`
-- `src/components/QrPoster.tsx` — prezentacyjny poster z QR
-- `src/components/Card.tsx` — wizualizacja karty
-- `src/lib/use-room.ts` + `src/lib/socket-client.ts`
-- `src/shared/types.ts` + `src/shared/socket-events.ts`
-- `server.ts` — custom Next.js + Socket.IO server (uruchamiany przez `tsx watch server.ts`)
-- 39/39 testów zielone; 0 błędów TS
+Po Etapie 7 działa stabilne MVP:
+- Automatyczny reconnect: `socket.on('connect')` → `room:rejoin` po każdym disconnect
+- Toasty (`sonner`): błędy join, statusy połączenia
+- Animacja `.card-in` w globals.css (widok stołu + kontroler)
+- 42/42 testy zielone; 0 błędów TS
+
+Zasady gry w szczegółach: `.claude/docs/game-rules.md`
 
 ## Twoje zadanie
 
-1. Stwórz `Dockerfile` (multi-stage), `docker-compose.yml` i `src/app/api/health/route.ts`.
-2. Przetestuj lokalne build: `docker build -t tramwajarz:latest .`
-3. Skorzystaj z agenta `deploy-vps` do wdrożenia na VPS `robert193`.
-4. Po ukończeniu edytuj plik `PROGRESS.md`:
-   - Oznacz Etap 6 jako `[x]`
-   - Dodaj notatki pod `### Etap 6` — co zostało zrealizowane, decyzje podjęte
-5. Nadpisz `PROGRESS-PROMPT.md` nowym promptem dla Etapu 7.
+1. Przeczytaj `.claude/docs/game-rules.md` — pełne zasady 4 faz zgadywania.
+2. Rozszerz `src/server/game-engine.ts`:
+   - Dodaj do `GameState` pole `phase: GuessPhase` i `roundCards: Card[]` (karty odkryte w bieżącej rundzie gracza)
+   - Dodaj funkcję `guess(state, playerId, guess)` → `{ state, correct, sipsAwarded }` lub error
+   - Logika: po poprawnej odpowiedzi w fazie 4 (`'suit'`) → tura przechodzi (`nextTurn`), nowa runda
+   - Łyki: faza 1 = 1 łyk, faza 2 = 2, faza 3 = 3, faza 4 = 4 (przy błędnej odpowiedzi)
+   - `drawCard` teraz ciągnie kartę i czeka na `guess` (nie przechodzi tury automatycznie)
+3. Dodaj event Socket.IO `game:guess { guess: string }` po stronie klienta i handler serwera.
+4. Zaktualizuj UI kontrolera (`room/[code]/page.tsx`):
+   - Zamiast przycisku „Ciągnij kartę" → przyciski fazy (np. kolor: Czerwony/Czarny, wyżej/niżej itd.)
+   - Wyświetl aktualną fazę i liczbę łyków gracza
+5. Zaktualizuj widok stołu (`table/[code]/page.tsx`) — pokaż aktualną fazę i kto ile łyków naliczył.
+6. Napisz testy jednostkowe dla `guess()` w `tests/game-engine.test.ts`.
+7. Upewnij się że testy przechodzą: `npm run test:run` i `npx tsc --noEmit`.
+8. Po ukończeniu edytuj `PROGRESS.md`:
+   - Oznacz Etap 8 jako `[x]`
+   - Dodaj notatki pod `### Etap 8`
 
 ## Uwagi
-- `npm run dev` = `tsx watch server.ts` (nie `next dev`)
-- `next.config.ts` musi mieć `output: 'standalone'` żeby Docker działał
-- `server.ts` jest pisany w TS — w builderze uruchom `npx tsc -p tsconfig.server.json` żeby dostać `dist/server.js`; możliwe że trzeba stworzyć osobny `tsconfig.server.json`
-- Nginx musi mieć `proxy_set_header Upgrade` dla `/socket.io/` — bez tego WS nie działa
-- Port na VPS mikr.us: sprawdź `ssh robert193 'cat ~/tramwajarz/.env'` lub ustal z użytkownikiem
-- Trzymaj się zakresu etapu — nie rób z góry kolejnych kroków
+- Przed pisaniem kodu przeczytaj aktualny `src/server/game-engine.ts` i `src/shared/types.ts`
+- Logika `guess()` powinna być czystą funkcją (bez side-effectów), testowalną bez sieci
+- Użyj skilla `/game-phase` jeśli potrzebujesz wygenerować szkielet kolejnej fazy
+- Trzymaj się zakresu etapu — nie przepisuj UI od zera, rozszerzaj istniejące komponenty
