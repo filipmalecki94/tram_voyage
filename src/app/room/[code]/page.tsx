@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/Card';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
 import { getSocket } from '@/lib/socket-client';
+import { cn } from '@/lib/utils';
 import type { Card as CardType, Suit } from '@/shared/types';
 
 const RANK_ORDER = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K', 'A'] as const;
@@ -51,6 +52,9 @@ export default function RoomPage() {
   // Dla Etapu 1 — wybrana odpowiedź przed zatwierdzeniem
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 
+  // Dla Etapu 2 — ile kolejek przypisać przy następnym kliknięciu
+  const [assignCount, setAssignCount] = useState(1);
+
   const prevConnectionStatus = useRef<string | null>(null);
   const wasDisconnected = useRef(false);
 
@@ -63,6 +67,11 @@ export default function RoomPage() {
       if (ok) {
         const pid = localStorage.getItem(`tram:playerId:${code}`);
         if (pid) setMyPlayerId(pid);
+      } else {
+        // Token nieważny (np. serwer zrestartował) — wyczyść stale dane i pokaż formularz join
+        setMyPlayerId(null);
+        localStorage.removeItem(`tram:playerId:${code}`);
+        localStorage.removeItem(`tram:token:${code}`);
       }
       setReconnecting(false);
     });
@@ -115,6 +124,17 @@ export default function RoomPage() {
     setSelectedAnswer(null);
   }, [state?.collecting?.currentPlayerIdx, state?.collecting?.round]);
 
+  // Clamp assignCount do aktualnej puli pasujących kart (zmienia się po każdym przypisaniu)
+  const pyramidCurrentCard = state?.pyramid?.currentCard ?? null;
+  const myHand_forEffect = state?.players.find((p) => p.id === myPlayerId)?.hand ?? [];
+  const matchingCardsCount = pyramidCurrentCard
+    ? myHand_forEffect.filter((c) => c.rank === pyramidCurrentCard.rank).length
+    : 0;
+  useEffect(() => {
+    if (matchingCardsCount === 0) return;
+    setAssignCount((prev) => Math.min(prev, matchingCardsCount));
+  }, [matchingCardsCount]);
+
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
     if (nick.length < 2 || nick.length > 16) return;
@@ -163,8 +183,8 @@ export default function RoomPage() {
     if (!res.ok) toast.error(res.error);
   }, [emit]);
 
-  const handlePyramidAssign = useCallback(async (toPlayerId: string) => {
-    const res = await emit('game:pyramidAssign', { toPlayerId });
+  const handlePyramidAssign = useCallback(async (toPlayerId: string, count: number) => {
+    const res = await emit('game:pyramidAssign', { toPlayerId, count });
     if (!res.ok) toast.error(res.error);
   }, [emit]);
 
@@ -527,15 +547,44 @@ export default function RoomPage() {
                     <p className="text-sm font-medium text-center">
                       Masz kartę o tej randze! Każ komuś pić:
                     </p>
+
+                    {/* Input: ile kolejek — pojawia się z animacją tylko gdy masz >1 pasującą kartę */}
+                    <div className={cn(
+                      'grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out',
+                      matchingCards.length > 1 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                    )}>
+                      <div className="min-h-0">
+                        <div className="pt-1 pb-2 flex flex-col gap-1">
+                          <label className="text-xs text-muted-foreground font-medium px-1">
+                            Ile kolejek (maks. {matchingCards.length})
+                          </label>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={matchingCards.length}
+                            value={assignCount}
+                            onChange={(e) => {
+                              const n = parseInt(e.target.value, 10);
+                              if (!Number.isNaN(n)) {
+                                setAssignCount(Math.min(Math.max(1, n), matchingCards.length));
+                              }
+                            }}
+                            className="h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       {otherPlayers.map((p) => (
                         <Button
                           key={p.id}
                           variant="outline"
                           className="h-12"
-                          onClick={() => handlePyramidAssign(p.id)}
+                          onClick={() => handlePyramidAssign(p.id, assignCount)}
                         >
-                          {p.nick}
+                          {p.nick}{assignCount > 1 ? ` ×${assignCount}` : ''}
                         </Button>
                       ))}
                     </div>

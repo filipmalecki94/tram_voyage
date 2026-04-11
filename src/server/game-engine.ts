@@ -387,6 +387,7 @@ export function pyramidAssignSips(
   state: GameState,
   fromPlayerId: string,
   toPlayerId: string,
+  count: number = 1,
 ): PyramidAssignResult {
   if (state.gamePhase !== 'pyramid' || !state.pyramid) {
     throw new Error('Nie w fazie piramidy');
@@ -404,9 +405,15 @@ export function pyramidAssignSips(
   }
 
   const targetRank = state.pyramid.currentCard.rank;
-  const matchIdx = fromPlayer.hand.findIndex((c) => c.rank === targetRank);
-  if (matchIdx === -1) {
+  const matchingIndices: number[] = [];
+  fromPlayer.hand.forEach((c, i) => {
+    if (c.rank === targetRank) matchingIndices.push(i);
+  });
+  if (matchingIndices.length === 0) {
     throw new Error('Brak karty pasującej do aktualnej karty piramidy');
+  }
+  if (count > matchingIndices.length) {
+    throw new Error('Za mało pasujących kart w ręce');
   }
 
   // Poziom = revealedLevels (0-indexed) → +1 do sipsów
@@ -420,10 +427,9 @@ export function pyramidAssignSips(
     }
   }
 
-  const newHand = [
-    ...fromPlayer.hand.slice(0, matchIdx),
-    ...fromPlayer.hand.slice(matchIdx + 1),
-  ];
+  // Usuń `count` pierwszych pasujących kart z ręki
+  const indicesToRemove = new Set(matchingIndices.slice(0, count));
+  const newHand = fromPlayer.hand.filter((_, i) => !indicesToRemove.has(i));
 
   const updatedPlayers = state.players.map((p) => {
     if (p.id === fromPlayerId) return { ...p, hand: newHand };
@@ -432,9 +438,10 @@ export function pyramidAssignSips(
 
   // Aktualizuj drinkGate — sipsy zostaną doliczone dopiero po potwierdzeniu picia
   let newGate: DrinkGate;
+  const sipsToAdd = level * count;
   if (!state.drinkGate) {
     newGate = {
-      entries: [{ playerId: toPlayerId, sips: level, reason: 'pyramid-assign', confirmed: false }],
+      entries: [{ playerId: toPlayerId, sips: sipsToAdd, reason: 'pyramid-assign', confirmed: false }],
       resumeAction: 'pyramid-next',
     };
   } else {
@@ -444,7 +451,7 @@ export function pyramidAssignSips(
       const existingEntry = state.drinkGate.entries[existingEntryIdx];
       const updatedEntries = state.drinkGate.entries.map((e, i) =>
         i === existingEntryIdx
-          ? { ...e, sips: existingEntry.sips + level, confirmed: false }
+          ? { ...e, sips: existingEntry.sips + sipsToAdd, confirmed: false }
           : e,
       );
       newGate = { ...state.drinkGate, entries: updatedEntries };
@@ -453,7 +460,7 @@ export function pyramidAssignSips(
         ...state.drinkGate,
         entries: [
           ...state.drinkGate.entries,
-          { playerId: toPlayerId, sips: level, reason: 'pyramid-assign', confirmed: false },
+          { playerId: toPlayerId, sips: sipsToAdd, reason: 'pyramid-assign', confirmed: false },
         ],
       };
     }

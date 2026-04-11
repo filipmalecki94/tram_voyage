@@ -170,7 +170,7 @@ export function registerSocketHandlers(
       if (room.gamePhase !== 'pyramid') return cb({ ok: false, error: 'wrong_phase' });
 
       try {
-        const result = pyramidAssignSips(room, playerId, data.toPlayerId);
+        const result = pyramidAssignSips(room, playerId, data.toPlayerId, data.count);
         rooms.updateRoom(roomCode, result.state);
         io.to(roomCode).emit('room:state', toPublicRoomState(result.state));
         cb({ ok: true, data: null });

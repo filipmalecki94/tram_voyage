@@ -35,6 +35,7 @@ export const collectingGuessSchema = z.object({
 
 export const pyramidAssignSchema = z.object({
   toPlayerId: z.string().min(1),
+  count: z.number().int().min(1).max(10),
 });
 
 export const pyramidNextSchema = z.object({}).strict();
