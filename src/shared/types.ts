@@ -32,12 +32,21 @@ export interface CollectingSubState {
   currentPlayerIdx: number;
 }
 
+export interface PyramidActiveDeal {
+  /** Ile sipsów z bieżącej karty zostało jeszcze do rozdania */
+  remainingSips: number;
+  /** Łączna liczba sipsów z karty (= level) */
+  totalSips: number;
+}
+
 export interface PyramidSubState {
   /** layout[i] = karty na poziomie i+1 (0-indexed: level 1..4) */
   layout: Card[][];
   revealedLevels: number;
   revealedInLevel: number;
   currentCard: Card | null;
+  /** Aktywne rozdanie (null = karta nie jest jeszcze "używana") */
+  activeDeal: PyramidActiveDeal | null;
 }
 
 export interface PublicPyramidSubState {
@@ -46,6 +55,10 @@ export interface PublicPyramidSubState {
   revealedLevels: number;
   revealedInLevel: number;
   currentCard: Card | null;
+  /** Poziom aktualnej karty (1–4), null gdy brak karty */
+  currentCardLevel: number | null;
+  /** Aktywne rozdanie — ile sipsów zostało do rozdzielenia */
+  activeDeal: PyramidActiveDeal | null;
 }
 
 export interface TramSubState {
@@ -127,11 +140,23 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
         return isRevealed ? card : null;
       });
     });
+    // Wyznacz poziom aktualnej karty (1-indexed)
+    let currentCardLevel: number | null = null;
+    if (py.currentCard) {
+      for (let lvl = 0; lvl < py.layout.length; lvl++) {
+        if (py.layout[lvl].some((c) => c === py.currentCard)) {
+          currentCardLevel = lvl + 1;
+          break;
+        }
+      }
+    }
     publicPyramid = {
       layout: publicLayout,
       revealedLevels: py.revealedLevels,
       revealedInLevel: py.revealedInLevel,
       currentCard: py.currentCard,
+      currentCardLevel,
+      activeDeal: py.activeDeal,
     };
   }
 

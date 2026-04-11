@@ -124,16 +124,19 @@ export default function RoomPage() {
     setSelectedAnswer(null);
   }, [state?.collecting?.currentPlayerIdx, state?.collecting?.round]);
 
-  // Clamp assignCount do aktualnej puli pasujących kart (zmienia się po każdym przypisaniu)
+  // Reset assignCount do 1 przy każdej nowej odsłoniętej karcie piramidy
   const pyramidCurrentCard = state?.pyramid?.currentCard ?? null;
-  const myHand_forEffect = state?.players.find((p) => p.id === myPlayerId)?.hand ?? [];
-  const matchingCardsCount = pyramidCurrentCard
-    ? myHand_forEffect.filter((c) => c.rank === pyramidCurrentCard.rank).length
-    : 0;
   useEffect(() => {
-    if (matchingCardsCount === 0) return;
-    setAssignCount((prev) => Math.min(prev, matchingCardsCount));
-  }, [matchingCardsCount]);
+    setAssignCount(1);
+  }, [pyramidCurrentCard]);
+
+  // Clamp assignCount do aktualnej puli pozostałych kolejek (activeDeal lub całego level)
+  const pyramidPool = state?.pyramid?.activeDeal?.remainingSips
+    ?? state?.pyramid?.currentCardLevel
+    ?? 1;
+  useEffect(() => {
+    setAssignCount((prev) => Math.min(prev, pyramidPool));
+  }, [pyramidPool]);
 
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
@@ -183,8 +186,8 @@ export default function RoomPage() {
     if (!res.ok) toast.error(res.error);
   }, [emit]);
 
-  const handlePyramidAssign = useCallback(async (toPlayerId: string, count: number) => {
-    const res = await emit('game:pyramidAssign', { toPlayerId, count });
+  const handlePyramidAssign = useCallback(async (toPlayerId: string, sips: number) => {
+    const res = await emit('game:pyramidAssign', { toPlayerId, sips });
     if (!res.ok) toast.error(res.error);
   }, [emit]);
 
@@ -542,52 +545,79 @@ export default function RoomPage() {
                   <Card card={currentCard} size="lg" />
                 </div>
 
-                {canAssign && !state.drinkGate && (
+                {canAssign && (
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium text-center">
-                      Masz kartę o tej randze! Każ komuś pić:
-                    </p>
+                    {/* Pula kolejek do rozdania */}
+                    {(() => {
+                      const level = py.currentCardLevel ?? 1;
+                      const pool = py.activeDeal?.remainingSips ?? level;
+                      const totalPool = py.activeDeal?.totalSips ?? level;
+                      const alreadyGiven = totalPool - pool;
+                      return (
+                        <>
+                          <p className="text-sm font-medium text-center">
+                            {py.activeDeal
+                              ? `Zostało ${pool} z ${totalPool} kolejek — każ pić:`
+                              : `Masz kartę! ${level > 1 ? `Rozdaj ${level} kolejki:` : 'Każ komuś pić:'}`}
+                          </p>
 
-                    {/* Input: ile kolejek — pojawia się z animacją tylko gdy masz >1 pasującą kartę */}
-                    <div className={cn(
-                      'grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out',
-                      matchingCards.length > 1 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                    )}>
-                      <div className="min-h-0">
-                        <div className="pt-1 pb-2 flex flex-col gap-1">
-                          <label className="text-xs text-muted-foreground font-medium px-1">
-                            Ile kolejek (maks. {matchingCards.length})
-                          </label>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={matchingCards.length}
-                            value={assignCount}
-                            onChange={(e) => {
-                              const n = parseInt(e.target.value, 10);
-                              if (!Number.isNaN(n)) {
-                                setAssignCount(Math.min(Math.max(1, n), matchingCards.length));
-                              }
-                            }}
-                            className="h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
-                          />
-                        </div>
-                      </div>
-                    </div>
+                          {/* Pasek postępu rozdawania */}
+                          <div className="flex gap-1 justify-center">
+                            {Array.from({ length: totalPool }).map((_, i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  'h-2 w-6 rounded-full transition-colors duration-200',
+                                  i < alreadyGiven ? 'bg-primary/40' : 'bg-primary',
+                                )}
+                              />
+                            ))}
+                          </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      {otherPlayers.map((p) => (
-                        <Button
-                          key={p.id}
-                          variant="outline"
-                          className="h-12"
-                          onClick={() => handlePyramidAssign(p.id, assignCount)}
-                        >
-                          {p.nick}{assignCount > 1 ? ` ×${assignCount}` : ''}
-                        </Button>
-                      ))}
-                    </div>
+                          {/* Input ile kolejek — widoczny gdy pool > 1 */}
+                          <div className={cn(
+                            'grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out',
+                            pool > 1 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                          )}>
+                            <div className="min-h-0">
+                              <div className="pt-1 pb-2 flex flex-col gap-1">
+                                <label className="text-xs text-muted-foreground font-medium px-1">
+                                  Ile kolejek dla gracza (maks. {pool})
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={pool}
+                                  value={assignCount}
+                                  onChange={(e) => {
+                                    const n = parseInt(e.target.value, 10);
+                                    if (!Number.isNaN(n)) {
+                                      setAssignCount(Math.min(Math.max(1, n), pool));
+                                    }
+                                  }}
+                                  className="h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            {otherPlayers.map((p) => (
+                              <Button
+                                key={p.id}
+                                variant="outline"
+                                className="h-12"
+                                onClick={() => handlePyramidAssign(p.id, assignCount)}
+                                disabled={!!state.drinkGate}
+                              >
+                                {p.nick}{assignCount > 1 ? ` ×${assignCount}` : ''}
+                              </Button>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

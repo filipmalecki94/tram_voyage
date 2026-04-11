@@ -509,7 +509,7 @@ describe('pyramidAssignSips', () => {
 
   it('dodaje N łyków graczowi (N = poziom 1)', () => {
     const state = pyramidStateWithCurrentCard();
-    const result = pyramidAssignSips(state, 'p1', 'p2');
+    const result = pyramidAssignSips(state, 'p1', 'p2', 1);
     expect(result.sipsAwarded).toBe(1);
     // Sipsy trafiają do gracza dopiero po confirmDrink
     const p2 = result.state.players.find((p) => p.id === 'p2')!;
@@ -522,7 +522,7 @@ describe('pyramidAssignSips', () => {
 
   it('usuwa kartę z ręki gracza przypisującego', () => {
     const state = pyramidStateWithCurrentCard();
-    const result = pyramidAssignSips(state, 'p1', 'p2');
+    const result = pyramidAssignSips(state, 'p1', 'p2', 1);
     const p1 = result.state.players.find((p) => p.id === 'p1')!;
     expect(p1.hand).toHaveLength(0);
   });
@@ -530,12 +530,12 @@ describe('pyramidAssignSips', () => {
   it('rzuca gdy brak pasującej rangi w ręce', () => {
     const state = pyramidStateWithCurrentCard();
     // p2 nie ma żadnej karty
-    expect(() => pyramidAssignSips(state, 'p2', 'p3')).toThrow();
+    expect(() => pyramidAssignSips(state, 'p2', 'p3', 1)).toThrow();
   });
 
   it('rzuca gdy from === to', () => {
     const state = pyramidStateWithCurrentCard();
-    expect(() => pyramidAssignSips(state, 'p1', 'p1')).toThrow();
+    expect(() => pyramidAssignSips(state, 'p1', 'p1', 1)).toThrow();
   });
 });
 
@@ -874,7 +874,7 @@ describe('confirmDrink', () => {
     const p1 = stateWithCard.players[0];
     const p2 = stateWithCard.players[1];
 
-    const assignResult = pyramidAssignSips(stateWithCard, p1.id, p2.id);
+    const assignResult = pyramidAssignSips(stateWithCard, p1.id, p2.id, 1);
     expect(assignResult.state.drinkGate).not.toBeNull();
 
     // pyramidNext zablokowane

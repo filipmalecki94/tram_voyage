@@ -304,6 +304,7 @@ export function enterPyramid(state: GameState): GameState {
     revealedLevels: 0,
     revealedInLevel: 0,
     currentCard: null,
+    activeDeal: null,
   };
 
   return {
@@ -358,6 +359,7 @@ export function pyramidNext(state: GameState, rng: RNG): PyramidNextResult {
     revealedLevels: newRevealedLevels,
     revealedInLevel: nextRevealedInLevel,
     currentCard: card,
+    activeDeal: null, // Nowa karta — reset aktywnego rozdania
   };
 
   let newState: GameState = {
@@ -387,7 +389,7 @@ export function pyramidAssignSips(
   state: GameState,
   fromPlayerId: string,
   toPlayerId: string,
-  count: number = 1,
+  sips: number,
 ): PyramidAssignResult {
   if (state.gamePhase !== 'pyramid' || !state.pyramid) {
     throw new Error('Nie w fazie piramidy');
@@ -404,54 +406,60 @@ export function pyramidAssignSips(
     throw new Error('Gracz nie znaleziony');
   }
 
-  const targetRank = state.pyramid.currentCard.rank;
-  const matchingIndices: number[] = [];
-  fromPlayer.hand.forEach((c, i) => {
-    if (c.rank === targetRank) matchingIndices.push(i);
-  });
-  if (matchingIndices.length === 0) {
-    throw new Error('Brak karty pasującej do aktualnej karty piramidy');
-  }
-  if (count > matchingIndices.length) {
-    throw new Error('Za mało pasujących kart w ręce');
-  }
+  const py = state.pyramid;
 
-  // Poziom = revealedLevels (0-indexed) → +1 do sipsów
-  // Aktualnie odsłaniamy na poziomie revealedLevels (przed inkrem.) ale currentCard jest ustawiona
-  // Musimy znać poziom currentCard. Szukamy w layout.
+  // Wyznacz poziom aktualnej karty
   let level = 1;
-  for (let lvl = 0; lvl < state.pyramid.layout.length; lvl++) {
-    if (state.pyramid.layout[lvl].some((c) => c === state.pyramid!.currentCard)) {
+  for (let lvl = 0; lvl < py.layout.length; lvl++) {
+    if (py.layout[lvl].some((c) => c === py.currentCard)) {
       level = lvl + 1;
       break;
     }
   }
 
-  // Usuń `count` pierwszych pasujących kart z ręki
-  const indicesToRemove = new Set(matchingIndices.slice(0, count));
-  const newHand = fromPlayer.hand.filter((_, i) => !indicesToRemove.has(i));
+  let newHand = fromPlayer.hand;
+  let newActiveDeal: typeof py.activeDeal;
+
+  if (!py.activeDeal) {
+    // Nowe rozdanie — zużyj 1 pasującą kartę z ręki
+    const targetRank = py.currentCard!.rank;
+    const matchIdx = fromPlayer.hand.findIndex((c) => c.rank === targetRank);
+    if (matchIdx === -1) {
+      throw new Error('Brak karty pasującej do aktualnej karty piramidy');
+    }
+    if (sips > level) {
+      throw new Error(`Można przypisać maks. ${level} kolejek z tej karty`);
+    }
+    newHand = [...fromPlayer.hand.slice(0, matchIdx), ...fromPlayer.hand.slice(matchIdx + 1)];
+    const remaining = level - sips;
+    newActiveDeal = remaining > 0 ? { remainingSips: remaining, totalSips: level } : null;
+  } else {
+    // Kontynuacja aktywnego rozdania — karta już zużyta, dzielimy pozostałe sipsy
+    if (sips > py.activeDeal.remainingSips) {
+      throw new Error(`Zostało tylko ${py.activeDeal.remainingSips} kolejek do rozdania`);
+    }
+    const remaining = py.activeDeal.remainingSips - sips;
+    newActiveDeal = remaining > 0 ? { ...py.activeDeal, remainingSips: remaining } : null;
+  }
 
   const updatedPlayers = state.players.map((p) => {
     if (p.id === fromPlayerId) return { ...p, hand: newHand };
     return p;
   });
 
-  // Aktualizuj drinkGate — sipsy zostaną doliczone dopiero po potwierdzeniu picia
+  // Aktualizuj drinkGate
   let newGate: DrinkGate;
-  const sipsToAdd = level * count;
   if (!state.drinkGate) {
     newGate = {
-      entries: [{ playerId: toPlayerId, sips: sipsToAdd, reason: 'pyramid-assign', confirmed: false }],
+      entries: [{ playerId: toPlayerId, sips, reason: 'pyramid-assign', confirmed: false }],
       resumeAction: 'pyramid-next',
     };
   } else {
     const existingEntryIdx = state.drinkGate.entries.findIndex((e) => e.playerId === toPlayerId);
     if (existingEntryIdx !== -1) {
-      // Dolicz sipsy i zresetuj potwierdzenie — gracz musi wypić więcej
-      const existingEntry = state.drinkGate.entries[existingEntryIdx];
       const updatedEntries = state.drinkGate.entries.map((e, i) =>
         i === existingEntryIdx
-          ? { ...e, sips: existingEntry.sips + sipsToAdd, confirmed: false }
+          ? { ...e, sips: e.sips + sips, confirmed: false }
           : e,
       );
       newGate = { ...state.drinkGate, entries: updatedEntries };
@@ -460,7 +468,7 @@ export function pyramidAssignSips(
         ...state.drinkGate,
         entries: [
           ...state.drinkGate.entries,
-          { playerId: toPlayerId, sips: sipsToAdd, reason: 'pyramid-assign', confirmed: false },
+          { playerId: toPlayerId, sips, reason: 'pyramid-assign', confirmed: false },
         ],
       };
     }
@@ -469,10 +477,11 @@ export function pyramidAssignSips(
   const newState: GameState = {
     ...state,
     players: updatedPlayers,
+    pyramid: { ...py, activeDeal: newActiveDeal },
     drinkGate: newGate,
   };
 
-  return { state: newState, sipsAwarded: level };
+  return { state: newState, sipsAwarded: sips };
 }
 
 // ----------------------------------------------------------------

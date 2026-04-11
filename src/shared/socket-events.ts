@@ -34,7 +34,7 @@ export interface ClientToServerEvents {
     cb: (res: Result<null>) => void,
   ) => void;
   'game:pyramidAssign': (
-    payload: { toPlayerId: string; count: number },
+    payload: { toPlayerId: string; sips: number },
     cb: (res: Result<null>) => void,
   ) => void;
   'game:pyramidNext': (
