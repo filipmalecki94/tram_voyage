@@ -52,9 +52,6 @@ export default function RoomPage() {
   // Dla Etapu 1 — wybrana odpowiedź przed zatwierdzeniem
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 
-  // Dla Etapu 2 — ile kolejek przypisać przy następnym kliknięciu
-  const [assignCount, setAssignCount] = useState(1);
-
   const prevConnectionStatus = useRef<string | null>(null);
   const wasDisconnected = useRef(false);
 
@@ -123,18 +120,6 @@ export default function RoomPage() {
   useEffect(() => {
     setSelectedAnswer(null);
   }, [state?.collecting?.currentPlayerIdx, state?.collecting?.round]);
-
-  // Reset assignCount do 1 przy każdej nowej odsłoniętej karcie piramidy
-  const pyramidCurrentCard = state?.pyramid?.currentCard ?? null;
-  useEffect(() => {
-    setAssignCount(1);
-  }, [pyramidCurrentCard]);
-
-  // Clamp assignCount do aktualnej puli pozostałych kolejek (activeDeals per-gracz)
-  const pyramidPool = state?.pyramid?.activeDeals?.[myPlayerId ?? '']?.remainingSips ?? 1;
-  useEffect(() => {
-    setAssignCount((prev) => Math.min(prev, pyramidPool));
-  }, [pyramidPool]);
 
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
@@ -569,43 +554,15 @@ export default function RoomPage() {
                             ))}
                           </div>
 
-                          {/* Input ile kolejek — widoczny gdy pool > 1 */}
-                          <div className={cn(
-                            'grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out',
-                            pool > 1 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                          )}>
-                            <div className="min-h-0">
-                              <div className="pt-1 pb-2 flex flex-col gap-1">
-                                <label className="text-xs text-muted-foreground font-medium px-1">
-                                  Ile kolejek dla gracza (maks. {pool})
-                                </label>
-                                <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  min={1}
-                                  max={pool}
-                                  value={assignCount}
-                                  onChange={(e) => {
-                                    const n = parseInt(e.target.value, 10);
-                                    if (!Number.isNaN(n)) {
-                                      setAssignCount(Math.min(Math.max(1, n), pool));
-                                    }
-                                  }}
-                                  className="h-12 w-full rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
                           <div className="grid grid-cols-2 gap-2">
                             {allPlayers.map((p) => (
                               <Button
                                 key={p.id}
                                 variant="outline"
                                 className="h-12"
-                                onClick={() => handlePyramidAssign(p.id, assignCount)}
+                                onClick={() => handlePyramidAssign(p.id, 1)}
                               >
-                                {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}{assignCount > 1 ? ` ×${assignCount}` : ''}
+                                {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}
                               </Button>
                             ))}
                           </div>
