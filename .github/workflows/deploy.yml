@@ -71,5 +71,9 @@ jobs:
             set -a && source .env && set +a
             docker compose pull
             docker compose up -d
-            sleep 8
-            curl -sf http://${BIND_IP:-127.0.0.1}:${TRAM_PORT:-3000}/api/health || (docker compose logs --tail 50 && exit 1)
+            for i in $(seq 1 12); do
+              sleep 5
+              curl -sf http://${BIND_IP:-127.0.0.1}:${TRAM_PORT:-3000}/api/health && break
+              echo "Healthcheck attempt $i/12 failed, retrying..."
+              [ $i -eq 12 ] && docker compose logs --tail 50 && exit 1
+            done
