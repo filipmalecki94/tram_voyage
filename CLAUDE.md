@@ -70,6 +70,12 @@ tests/
   room-manager.test.ts
 ```
 
+## Wersjonowanie
+
+- Wersja debug widoczna w UI: `src/app/layout.tsx` (fixed span, prawy górny róg).
+- Przy każdym bumping wersji (np. „zrób v0.2.0") — zmień **tylko** ten string w `layout.tsx`.
+- Git tag (`git tag vX.Y.Z`) twórz **tylko** gdy użytkownik o to jawnie poprosi.
+
 ## Eventy Socket.IO
 
 Pełna specyfikacja: `.claude/docs/socket-protocol.md`

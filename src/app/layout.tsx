@@ -30,7 +30,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <span className="fixed top-2 right-2 z-50 text-[10px] text-muted-foreground/50 font-mono select-none pointer-events-none">
-          v0.0.3
+          v0.1.0
         </span>
         {children}
         <Toaster richColors position="top-center" />
