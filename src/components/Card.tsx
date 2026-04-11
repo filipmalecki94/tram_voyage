@@ -11,18 +11,20 @@ const SIZE_CLASSES = {
   sm: 'w-16 h-24 text-xs',
   md: 'w-24 h-36 text-sm',
   lg: 'w-40 h-56 text-base',
+  xl: 'w-56 h-80 text-2xl',
 };
 
 const SUIT_CENTER_SIZE = {
   sm: 'text-3xl',
   md: 'text-5xl',
   lg: 'text-7xl',
+  xl: 'text-9xl',
 };
 
 interface Props {
   card?: CardType;
   faceDown?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export function Card({ card, faceDown = false, size = 'md' }: Props) {

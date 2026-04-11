@@ -60,7 +60,7 @@ export default function TablePage() {
   })();
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white flex flex-col lg:flex-row gap-0">
+    <main className="h-screen bg-neutral-950 text-white flex flex-col lg:flex-row gap-0 overflow-hidden">
       {/* Lewa kolumna — QR + kod */}
       <aside className="lg:w-80 flex flex-col items-center justify-center p-8 gap-6 border-b lg:border-b-0 lg:border-r border-neutral-800 shrink-0">
         {joinUrl ? (
@@ -77,7 +77,7 @@ export default function TablePage() {
       </aside>
 
       {/* Prawa kolumna — gra */}
-      <section className="flex-1 flex flex-col p-8 gap-8 overflow-hidden">
+      <section className="flex-1 flex flex-col p-8 gap-8 overflow-hidden min-h-0">
         {/* Header */}
         <div>
           <h1 className="text-4xl font-bold tracking-tight">Tramwajarz</h1>
@@ -192,63 +192,80 @@ export default function TablePage() {
 
         {/* Etap 2 — Piramida */}
         {state?.gamePhase === 'pyramid' && state.pyramid && (
-          <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest mb-4">
-              Piramida
-            </p>
-            <div className="flex flex-col items-center gap-3">
-              {state.pyramid.layout.map((levelCards, lvlIdx) => {
-                const level = lvlIdx + 1;
-                return (
-                  <div key={lvlIdx} className="flex gap-2 justify-center" aria-label={`Poziom ${level} — ${level} kolejki`}>
-                    {levelCards.map((card, cardIdx) => {
-                      const isRevealed = card !== null;
-                      const isCurrent =
-                        isRevealed &&
-                        state.pyramid!.currentCard !== null &&
-                        card.rank === state.pyramid!.currentCard.rank &&
-                        card.suit === state.pyramid!.currentCard.suit;
-                      return (
-                        <div
-                          key={cardIdx}
-                          className={`rounded-lg border-2 ${
-                            isCurrent
-                              ? 'border-yellow-400 shadow-lg shadow-yellow-400/30'
-                              : 'border-neutral-700'
-                          }`}
-                        >
-                          {isRevealed ? (
-                            <Card card={card} size="sm" />
-                          ) : (
-                            <div className="w-16 h-24 bg-neutral-700 rounded-md flex items-center justify-center text-neutral-500 text-xs">
-                              ?
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Łyki za bieżącą kartę — z drinkGate */}
-            {state.pyramid.currentCard && state.drinkGate && state.drinkGate.entries.length > 0 && (
-              <div className="mt-4 flex flex-col gap-1">
-                <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">
-                  Łyki za tę kartę
-                </p>
-                {state.drinkGate.entries.map((entry) => {
-                  const player = state.players.find((p) => p.id === entry.playerId);
+          <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
+            {/* Lewa część — piramida */}
+            <div className="flex flex-col gap-4 px-8 pt-0 pb-8 overflow-y-auto shrink-0">
+              <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest">
+                Piramida
+              </p>
+              <div className="flex flex-col items-center gap-3">
+                {state.pyramid.layout.map((levelCards, lvlIdx) => {
+                  const level = lvlIdx + 1;
                   return (
-                    <div key={entry.playerId} className="flex justify-between text-sm bg-neutral-800 px-3 py-1 rounded">
-                      <span>{player?.nick ?? entry.playerId}</span>
-                      <span className="font-bold">🍺 {entry.sips} {entry.confirmed ? '✓' : '…'}</span>
+                    <div key={lvlIdx} className="flex gap-2 justify-center" aria-label={`Poziom ${level} — ${level} kolejki`}>
+                      {levelCards.map((card, cardIdx) => {
+                        const isRevealed = card !== null;
+                        const isCurrent =
+                          isRevealed &&
+                          state.pyramid!.currentCard !== null &&
+                          card.rank === state.pyramid!.currentCard.rank &&
+                          card.suit === state.pyramid!.currentCard.suit;
+                        return (
+                          <div
+                            key={cardIdx}
+                            className={`rounded-lg border-2 ${
+                              isCurrent
+                                ? 'border-yellow-400 shadow-lg shadow-yellow-400/30'
+                                : 'border-neutral-700'
+                            }`}
+                          >
+                            {isRevealed ? (
+                              <Card card={card} size="sm" />
+                            ) : (
+                              <div className="w-16 h-24 bg-neutral-700 rounded-md flex items-center justify-center text-neutral-500 text-xs">
+                                ?
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
               </div>
-            )}
+
+              {/* Łyki za bieżącą kartę — z drinkGate */}
+              {state.pyramid.currentCard && state.drinkGate && state.drinkGate.entries.length > 0 && (
+                <div className="mt-4 flex flex-col gap-1">
+                  <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">
+                    Łyki za tę kartę
+                  </p>
+                  {state.drinkGate.entries.map((entry) => {
+                    const player = state.players.find((p) => p.id === entry.playerId);
+                    return (
+                      <div key={entry.playerId} className="flex justify-between text-sm bg-neutral-800 px-3 py-1 rounded">
+                        <span>{player?.nick ?? entry.playerId}</span>
+                        <span className="font-bold">🍺 {entry.sips} {entry.confirmed ? '✓' : '…'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Prawa część — aktualnie grana karta (pełna wysokość) */}
+            <div className="flex-1 flex flex-col items-center justify-center border-l border-neutral-800 bg-neutral-900/20 gap-4 pb-8">
+              {state.pyramid.currentCard ? (
+                <>
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest">
+                    Aktualna karta
+                  </p>
+                  <Card card={state.pyramid.currentCard} size="xl" />
+                </>
+              ) : (
+                <p className="text-neutral-700 text-lg">Oczekiwanie na odsłonięcie…</p>
+              )}
+            </div>
           </div>
         )}
 
