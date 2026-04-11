@@ -130,10 +130,8 @@ export default function RoomPage() {
     setAssignCount(1);
   }, [pyramidCurrentCard]);
 
-  // Clamp assignCount do aktualnej puli pozostałych kolejek (activeDeal lub całego level)
-  const pyramidPool = state?.pyramid?.activeDeal?.remainingSips
-    ?? state?.pyramid?.currentCardLevel
-    ?? 1;
+  // Clamp assignCount do aktualnej puli pozostałych kolejek (activeDeals per-gracz)
+  const pyramidPool = state?.pyramid?.activeDeals?.[myPlayerId ?? '']?.remainingSips ?? 1;
   useEffect(() => {
     setAssignCount((prev) => Math.min(prev, pyramidPool));
   }, [pyramidPool]);
@@ -529,12 +527,11 @@ export default function RoomPage() {
       {state.gamePhase === 'pyramid' && state.pyramid && (() => {
         const py = state.pyramid;
         const currentCard = py.currentCard;
-        // Karty w ręce pasujące do aktualnej karty piramidy
-        const matchingCards = currentCard
-          ? myHand.filter((c) => c.rank === currentCard.rank)
-          : [];
-        const canAssign = matchingCards.length > 0;
-        const otherPlayers = state.players.filter((p) => p.id !== myPlayerId);
+        // Gracz może rozdawać jeśli ma aktywny deal (kartę odłożono przy odsłonięciu)
+        const myDeal = py.activeDeals[myPlayerId ?? ''];
+        const canAssign = !!myDeal;
+        // Wszyscy gracze (self-assign dozwolony)
+        const allPlayers = state.players;
 
         return (
           <div className="flex flex-col gap-4 mt-2">
@@ -545,20 +542,18 @@ export default function RoomPage() {
                   <Card card={currentCard} size="lg" />
                 </div>
 
-                {canAssign && (
+                {canAssign && myDeal && (
                   <div className="flex flex-col gap-2">
-                    {/* Pula kolejek do rozdania */}
                     {(() => {
-                      const level = py.currentCardLevel ?? 1;
-                      const pool = py.activeDeal?.remainingSips ?? level;
-                      const totalPool = py.activeDeal?.totalSips ?? level;
+                      const pool = myDeal.remainingSips;
+                      const totalPool = myDeal.totalSips;
                       const alreadyGiven = totalPool - pool;
                       return (
                         <>
                           <p className="text-sm font-medium text-center">
-                            {py.activeDeal
+                            {alreadyGiven > 0
                               ? `Zostało ${pool} z ${totalPool} kolejek — każ pić:`
-                              : `Masz kartę! ${level > 1 ? `Rozdaj ${level} kolejki:` : 'Każ komuś pić:'}`}
+                              : `Masz kartę! ${totalPool > 1 ? `Rozdaj ${totalPool} kolejki:` : 'Każ komuś pić:'}`}
                           </p>
 
                           {/* Pasek postępu rozdawania */}
@@ -603,15 +598,14 @@ export default function RoomPage() {
                           </div>
 
                           <div className="grid grid-cols-2 gap-2">
-                            {otherPlayers.map((p) => (
+                            {allPlayers.map((p) => (
                               <Button
                                 key={p.id}
                                 variant="outline"
                                 className="h-12"
                                 onClick={() => handlePyramidAssign(p.id, assignCount)}
-                                disabled={!!state.drinkGate}
                               >
-                                {p.nick}{assignCount > 1 ? ` ×${assignCount}` : ''}
+                                {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}{assignCount > 1 ? ` ×${assignCount}` : ''}
                               </Button>
                             ))}
                           </div>
@@ -636,7 +630,7 @@ export default function RoomPage() {
             {amHost && (
               <Button
                 className="h-14 text-lg w-full mt-2"
-                disabled={!!state.drinkGate}
+                disabled={!!state.drinkGate || Object.keys(py.activeDeals).length > 0}
                 onClick={handlePyramidNext}
               >
                 Odsłoń następną kartę

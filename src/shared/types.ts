@@ -32,10 +32,10 @@ export interface CollectingSubState {
   currentPlayerIdx: number;
 }
 
-export interface PyramidActiveDeal {
-  /** Ile sipsów z bieżącej karty zostało jeszcze do rozdania */
+export interface PyramidPlayerDeal {
+  /** Ile kolejek gracz ma jeszcze do rozdania */
   remainingSips: number;
-  /** Łączna liczba sipsów z karty (= level) */
+  /** Łączna pula gracza na tę kartę (= level) */
   totalSips: number;
 }
 
@@ -45,8 +45,8 @@ export interface PyramidSubState {
   revealedLevels: number;
   revealedInLevel: number;
   currentCard: Card | null;
-  /** Aktywne rozdanie (null = karta nie jest jeszcze "używana") */
-  activeDeal: PyramidActiveDeal | null;
+  /** Aktywne rozdania per gracz: playerId → pozostała pula. Puste = wszyscy rozdali. */
+  activeDeals: Record<string, PyramidPlayerDeal>;
 }
 
 export interface PublicPyramidSubState {
@@ -57,8 +57,8 @@ export interface PublicPyramidSubState {
   currentCard: Card | null;
   /** Poziom aktualnej karty (1–4), null gdy brak karty */
   currentCardLevel: number | null;
-  /** Aktywne rozdanie — ile sipsów zostało do rozdzielenia */
-  activeDeal: PyramidActiveDeal | null;
+  /** Aktywne rozdania per gracz (playerId → pula). Puste = wszyscy rozdali. */
+  activeDeals: Record<string, PyramidPlayerDeal>;
 }
 
 export interface TramSubState {
@@ -156,7 +156,7 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
       revealedInLevel: py.revealedInLevel,
       currentCard: py.currentCard,
       currentCardLevel,
-      activeDeal: py.activeDeal,
+      activeDeals: py.activeDeals,
     };
   }
 

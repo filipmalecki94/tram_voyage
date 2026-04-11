@@ -482,18 +482,13 @@ describe('enterPyramid', () => {
 // pyramidAssignSips
 // ----------------------------------------------------------------
 describe('pyramidAssignSips', () => {
+  // W nowym modelu: karta usuwana z ręki przy odsłonięciu (pyramidNext),
+  // a deal tworzony automatycznie. Tu symulujemy stan PO odsłonięciu ręcznie.
   function pyramidStateWithCurrentCard(): RoomState {
     const base = createGame(makePlayers(3), seededRng(1));
     const collecting = startCollecting(base, seededRng(1));
-    // Daj p1 kartę o randze 7
-    const p1Card: Card = { rank: 7, suit: 'hearts' };
-    const players = collecting.players.map((p) =>
-      p.id === 'p1' ? { ...p, hand: [p1Card] } : p,
-    );
-    const pyState = enterPyramid({ ...collecting, players });
-    // Ustaw currentCard na kartę o tej samej randze (7) — ręcznie
+    const pyState = enterPyramid(collecting);
     const fakeCurrentCard: Card = { rank: 7, suit: 'spades' };
-    // Wstaw ją do layout[0][0] i oznacz jako odkrytą
     const layout = [[fakeCurrentCard], ...pyState.pyramid!.layout.slice(1)];
     return {
       ...pyState,
@@ -503,6 +498,10 @@ describe('pyramidAssignSips', () => {
         currentCard: fakeCurrentCard,
         revealedLevels: 0,
         revealedInLevel: 1,
+        // p1 ma aktywny deal (karta odłożona przy odsłonięciu, level 1 = 1 kolejka)
+        activeDeals: {
+          p1: { remainingSips: 1, totalSips: 1 },
+        },
       },
     };
   }
@@ -520,22 +519,49 @@ describe('pyramidAssignSips', () => {
     expect(result.state.drinkGate!.resumeAction).toBe('pyramid-next');
   });
 
-  it('usuwa kartę z ręki gracza przypisującego', () => {
+  it('deal gracza maleje po przypisaniu (karta nie jest w ręce — usunięta przy odsłonięciu)', () => {
     const state = pyramidStateWithCurrentCard();
     const result = pyramidAssignSips(state, 'p1', 'p2', 1);
+    // Deal wyczerpany — usunięty z activeDeals
+    expect(result.state.pyramid!.activeDeals['p1']).toBeUndefined();
+    // Ręka p1 nie jest modyfikowana przez pyramidAssignSips
     const p1 = result.state.players.find((p) => p.id === 'p1')!;
     expect(p1.hand).toHaveLength(0);
   });
 
-  it('rzuca gdy brak pasującej rangi w ręce', () => {
+  it('rzuca gdy brak aktywnego dealu', () => {
     const state = pyramidStateWithCurrentCard();
-    // p2 nie ma żadnej karty
+    // p2 nie ma dealu w activeDeals
     expect(() => pyramidAssignSips(state, 'p2', 'p3', 1)).toThrow();
   });
 
-  it('rzuca gdy from === to', () => {
+  it('nie rzuca gdy from === to (self-assign dozwolony)', () => {
     const state = pyramidStateWithCurrentCard();
-    expect(() => pyramidAssignSips(state, 'p1', 'p1', 1)).toThrow();
+    expect(() => pyramidAssignSips(state, 'p1', 'p1', 1)).not.toThrow();
+  });
+
+  it('deal z pulą > 1: partial assign zmniejsza remainingSips', () => {
+    const base = createGame(makePlayers(3), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    const pyState = enterPyramid(collecting);
+    const fakeCurrentCard: Card = { rank: 7, suit: 'spades' };
+    const layout = [[fakeCurrentCard], ...pyState.pyramid!.layout.slice(1)];
+    const stateLevel2: RoomState = {
+      ...pyState,
+      pyramid: {
+        ...pyState.pyramid!,
+        layout,
+        currentCard: fakeCurrentCard,
+        revealedLevels: 0,
+        revealedInLevel: 1,
+        activeDeals: {
+          p1: { remainingSips: 2, totalSips: 2 },
+        },
+      },
+    };
+    const result = pyramidAssignSips(stateLevel2, 'p1', 'p2', 1);
+    expect(result.state.pyramid!.activeDeals['p1']).toEqual({ remainingSips: 1, totalSips: 2 });
+    expect(result.sipsAwarded).toBe(1);
   });
 });
 
@@ -864,12 +890,15 @@ describe('confirmDrink', () => {
     const r0 = pyramidNext(py, seededRng(1));
     const currentCard = r0.state.pyramid!.currentCard!;
 
-    // Daj p1 kartę pasującą do currentCard
+    // Symuluj stan po odsłonięciu: p1 ma deal (karta usunięta z ręki przez pyramidNext)
     const stateWithCard: RoomState = {
       ...r0.state,
-      players: r0.state.players.map((p, i) =>
-        i === 0 ? { ...p, hand: [currentCard] } : p,
-      ),
+      pyramid: {
+        ...r0.state.pyramid!,
+        activeDeals: {
+          [r0.state.players[0].id]: { remainingSips: 1, totalSips: 1 },
+        },
+      },
     };
     const p1 = stateWithCard.players[0];
     const p2 = stateWithCard.players[1];

@@ -304,7 +304,7 @@ export function enterPyramid(state: GameState): GameState {
     revealedLevels: 0,
     revealedInLevel: 0,
     currentCard: null,
-    activeDeal: null,
+    activeDeals: {},
   };
 
   return {
@@ -335,6 +335,9 @@ export function pyramidNext(state: GameState, rng: RNG): PyramidNextResult {
   if (state.drinkGate) {
     throw new Error('Czekamy na potwierdzenie picia');
   }
+  if (Object.keys(state.pyramid.activeDeals).length > 0) {
+    throw new Error('Gracze nie rozdali jeszcze wszystkich kolejek');
+  }
   const py = state.pyramid;
 
   // Aktualny poziom i indeks karty do odsłonięcia
@@ -354,16 +357,29 @@ export function pyramidNext(state: GameState, rng: RNG): PyramidNextResult {
 
   const allDone = levelDone && newRevealedLevels >= PYRAMID_LEVELS.length;
 
+  // Utwórz deale dla wszystkich graczy posiadających pasującą rangę
+  // Usuń po 1 karcie z każdego gracza i przyznaj pulę level kolejek
+  const newActiveDeals: Record<string, { remainingSips: number; totalSips: number }> = {};
+  const updatedPlayersForDeals = state.players.map((p) => {
+    const matchIdx = p.hand.findIndex((c) => c.rank === card.rank);
+    if (matchIdx === -1) return p;
+    // Gracz ma pasującą kartę — usuń ją i utwórz deal
+    newActiveDeals[p.id] = { remainingSips: level, totalSips: level };
+    const newHand = [...p.hand.slice(0, matchIdx), ...p.hand.slice(matchIdx + 1)];
+    return { ...p, hand: newHand };
+  });
+
   const newPyramid: PyramidSubState = {
     ...py,
     revealedLevels: newRevealedLevels,
     revealedInLevel: nextRevealedInLevel,
     currentCard: card,
-    activeDeal: null, // Nowa karta — reset aktywnego rozdania
+    activeDeals: newActiveDeals,
   };
 
   let newState: GameState = {
     ...state,
+    players: updatedPlayersForDeals,
     pyramid: newPyramid,
   };
 
@@ -397,55 +413,30 @@ export function pyramidAssignSips(
   if (!state.pyramid.currentCard) {
     throw new Error('Brak aktualnie odkrytej karty');
   }
-  if (fromPlayerId === toPlayerId) {
-    throw new Error('Nie możesz kazać pić samemu sobie');
-  }
-  const fromPlayer = state.players.find((p) => p.id === fromPlayerId);
-  const toPlayer = state.players.find((p) => p.id === toPlayerId);
-  if (!fromPlayer || !toPlayer) {
-    throw new Error('Gracz nie znaleziony');
-  }
 
   const py = state.pyramid;
-
-  // Wyznacz poziom aktualnej karty
-  let level = 1;
-  for (let lvl = 0; lvl < py.layout.length; lvl++) {
-    if (py.layout[lvl].some((c) => c === py.currentCard)) {
-      level = lvl + 1;
-      break;
-    }
+  const toPlayer = state.players.find((p) => p.id === toPlayerId);
+  if (!toPlayer) {
+    throw new Error('Gracz docelowy nie znaleziony');
   }
 
-  let newHand = fromPlayer.hand;
-  let newActiveDeal: typeof py.activeDeal;
+  // Sprawdź deal przypisującego gracza
+  const deal = py.activeDeals[fromPlayerId];
+  if (!deal) {
+    throw new Error('Nie masz aktywnego rozdania dla tej karty');
+  }
+  if (sips < 1 || sips > deal.remainingSips) {
+    throw new Error(`Możesz przypisać 1–${deal.remainingSips} kolejek`);
+  }
 
-  if (!py.activeDeal) {
-    // Nowe rozdanie — zużyj 1 pasującą kartę z ręki
-    const targetRank = py.currentCard!.rank;
-    const matchIdx = fromPlayer.hand.findIndex((c) => c.rank === targetRank);
-    if (matchIdx === -1) {
-      throw new Error('Brak karty pasującej do aktualnej karty piramidy');
-    }
-    if (sips > level) {
-      throw new Error(`Można przypisać maks. ${level} kolejek z tej karty`);
-    }
-    newHand = [...fromPlayer.hand.slice(0, matchIdx), ...fromPlayer.hand.slice(matchIdx + 1)];
-    const remaining = level - sips;
-    newActiveDeal = remaining > 0 ? { remainingSips: remaining, totalSips: level } : null;
+  // Zaktualizuj deal — usuń gdy wyczerpany
+  const newRemaining = deal.remainingSips - sips;
+  const newActiveDeals = { ...py.activeDeals };
+  if (newRemaining > 0) {
+    newActiveDeals[fromPlayerId] = { ...deal, remainingSips: newRemaining };
   } else {
-    // Kontynuacja aktywnego rozdania — karta już zużyta, dzielimy pozostałe sipsy
-    if (sips > py.activeDeal.remainingSips) {
-      throw new Error(`Zostało tylko ${py.activeDeal.remainingSips} kolejek do rozdania`);
-    }
-    const remaining = py.activeDeal.remainingSips - sips;
-    newActiveDeal = remaining > 0 ? { ...py.activeDeal, remainingSips: remaining } : null;
+    delete newActiveDeals[fromPlayerId];
   }
-
-  const updatedPlayers = state.players.map((p) => {
-    if (p.id === fromPlayerId) return { ...p, hand: newHand };
-    return p;
-  });
 
   // Aktualizuj drinkGate
   let newGate: DrinkGate;
@@ -476,8 +467,7 @@ export function pyramidAssignSips(
 
   const newState: GameState = {
     ...state,
-    players: updatedPlayers,
-    pyramid: { ...py, activeDeal: newActiveDeal },
+    pyramid: { ...py, activeDeals: newActiveDeals },
     drinkGate: newGate,
   };
 
