@@ -10,9 +10,18 @@
 | **5** | Widok stołu + QR | [x] |
 | **6** | Docker + deploy na mikr.us | [x] |
 | **7** | Polish + reconnect | [x] |
-| **8** | Pełne zasady Tramwajarza (iteracja 2) | [ ] |
+| **8** | Pełne zasady Tramwajarza (iteracja 2) | [x] |
 
 ## Notatki
+
+### Etap 8 (2026-04-11)
+- **Architektura faz:** `RoomState` rozszerzony o `gamePhase: GamePhase | null`, `collecting`, `pyramid`, `tram`, `winnerId`. Sub-stany jako osobne pola (nie tagged union) — prostsze zmiany w wielu miejscach.
+- **Ręka graczy w stanie publicznym:** `PublicRoomState.handsByPlayerId: Record<string, Card[]>` — cały snapshot, klient filtruje po swoim `playerId`. Ukrywa nieodkryte karty piramidy (null) i `tram.deck` (tylko `tramDeckLeft`).
+- **Usunięcie `game:drawCard`:** zastąpiony przez `game:collectingGuess` i `game:tramGuess`, które atomowo zdejmują kartę i rozstrzygają wynik.
+- **Automatyczne przejścia faz:** `collectingGuess` → `enterPyramid` po R4 ostatniego gracza; `pyramidNext` → `enterTram` po 10 odsłonięciach.
+- **Tęcza:** wykrywana po stronie klienta (`isRainbowAvailable`, `missingSuit`) dla UI + weryfikowana po stronie serwera w engine.
+- **Testy:** 50 testów game-engine (nowe) + 22 pozostałe = 72/72 zielone. `npx tsc --noEmit` = 0 błędów. `npm run build` = zielony.
+- **UI:** wachlarz kart (`fixed bottom` z translateX/rotate per karta), przyciski zależne od fazy/rundy, wizualizacja piramidy (Card|null layout), streak counter 0/5 w Etapie 3.
 
 ### Etap 7 (2026-04-11)
 - **Auto-reconnect:** `socket.io-client` skonfigurowany jawnie (`reconnectionDelay: 500ms`, `reconnectionDelayMax: 3000ms`). `RoomPage` rejestruje listener `socket.on('connect')` z flagą `wasDisconnected` — wywołuje `room:rejoin` tylko przy właściwym reconnect (nie przy pierwszym mount).

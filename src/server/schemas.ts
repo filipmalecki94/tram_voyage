@@ -18,6 +18,35 @@ export const tableSubscribeSchema = z.object({
   code: z.string().length(6),
 });
 
+export const collectingGuessSchema = z.object({
+  answer: z.union([
+    z.literal('black'),
+    z.literal('red'),
+    z.literal('higher'),
+    z.literal('lower'),
+    z.literal('inside'),
+    z.literal('outside'),
+    z.literal('spades'),
+    z.literal('clubs'),
+    z.literal('diamonds'),
+    z.literal('hearts'),
+  ]),
+});
+
+export const pyramidAssignSchema = z.object({
+  toPlayerId: z.string().min(1),
+});
+
+export const pyramidNextSchema = z.object({}).strict();
+
+export const tramGuessSchema = z.object({
+  answer: z.union([
+    z.literal('higher'),
+    z.literal('lower'),
+    z.literal('reference'),
+  ]),
+});
+
 export function validate<T>(
   schema: z.ZodSchema<T>,
   payload: unknown,

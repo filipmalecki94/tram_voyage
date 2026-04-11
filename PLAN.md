@@ -259,14 +259,71 @@ Spisane zasady Tramwajarza (pełne, żeby iteracja 2 nie wymagała research'u):
 
 ---
 
-## Etap 8 — Iteracja 2: pełne zasady Tramwajarza (poza MVP)
+## Etap 8 — Iteracja 2: pełne zasady Tramwajarza (trzy etapy rozgrywki)
 
-Rozszerzenie `GameEngine` do state machine z fazami:
-- `phase: 'color' | 'highLow' | 'insideOutside' | 'suit'`
-- Akcja `guess(playerId, guess)` → aktualizacja fazy / koniec rundy / kara
-- Licznik „łyków" dla graczy
-- Zmiany UI: przyciski zgadywania zamiast samego „Ciągnij"
-- Skill `/game-phase` (z Etapu 0) pomaga w generowaniu kolejnych faz
+**Cel:** Rozszerzenie `GameEngine` z MVP („ciągnij kartę po kolei") do pełnej gry
+złożonej z trzech sekwencyjnych etapów. Pełne zasady: `.claude/docs/game-rules.md`.
+
+### Zmiany w modelu stanu
+
+- Nowy typ `GamePhase`: `'collecting' | 'pyramid' | 'tram' | 'ended'`
+- `RoomState.gamePhase: GamePhase` (uzupełnia `status: 'waiting'|'playing'|'ended'`)
+- `Player.hand: Card[]` — karty w ręce gracza (nowy koncept, dziś nie istnieje)
+- Sub-stan `collecting`: `{ round: 1|2|3|4, currentPlayerIdx: number }`
+- Sub-stan `pyramid`: `{ layout: Card[][], currentRevealIdx: number, pendingSipsByPlayer: Record<string, number> }`
+- Sub-stan `tram`: `{ deck: Card[], lastCard: Card | null, streak: number, tramPlayerId: string }`
+
+### Nowe funkcje czyste w `src/server/game-engine.ts`
+
+- `startCollecting(state, rng)` — inicjalizuje Etap 1 (puste ręce, round=1, idx=0)
+- `collectingGuess(state, playerId, guess)` → `{ state, correct, sipsAwarded, rainbowTriggered? }` — waliduje turę + rundę, ciąga kartę, rozstrzyga trafienie/pudło, aktualizuje `hand` + `sips`, przesuwa `currentPlayerIdx` (lub `round+1` gdy wszyscy zagrali w rundzie)
+- `isRainbowAvailable(hand: Card[]): boolean` — czy ręka ma 3 różne symbole
+- `missingSuit(hand: Card[]): Suit | null` — brakujący 4. symbol (dla tęczy)
+- `enterPyramid(state)` — buduje piramidę 1+2+3+4 z leftover deck, ustawia `gamePhase: 'pyramid'`
+- `revealPyramidCard(state)` — odsłania kolejną kartę, oblicza matchy rang w rękach graczy
+- `pyramidAssignSips(state, fromPlayerId, toPlayerId)` → `{ state, sipsAwarded }` — rozdanie N łyków (N = poziom)
+- `pickTramPlayer(state): string` — logika tiebreakerów: największa ręka → najniższa najwyższa karta → itd. → losowo
+- `enterTram(state, rng)` — nowa potasowana talia, streak=0, `gamePhase: 'tram'`
+- `tramGuess(state, guess: 'higher'|'lower')` → `{ state, correct }` — wyżej/niżej, streak++ lub reset+pije+nowa talia
+
+### Nowe eventy Socket.IO (zod na wejściu, `src/server/schemas.ts`)
+
+- C→S `game:collectingGuess` — `{ answer: string }` (format zależny od rundy: `'black'|'red'`, `'higher'|'lower'`, `'inside'|'outside'`, `'spades'|'clubs'|'diamonds'|'hearts'`)
+- C→S `game:pyramidAssign` — `{ toPlayerId: string }` (gracz z pasującą kartą wyznacza kto pije)
+- C→S `game:pyramidNext` — host odsłania kolejną kartę piramidy
+- C→S `game:tramGuess` — `{ answer: 'higher'|'lower' }`
+- S→C `room:state` — pełny snapshot (jak dziś), rozszerzony `PublicRoomState`
+- S→C `game:rainbow` — animacja tęczy (opcjonalny event dla UI)
+- S→C `game:ended` — z `winnerId` (tramwajarz który ukończył 5-streak)
+
+### UI — kontroler `src/app/room/[code]/page.tsx`
+
+- Wachlarz kart w ręce przy dolnej krawędzi (posortowany rosnąco, częściowo ukryty)
+- Etap 1 (collecting): przyciski zgadywania zależne od `collecting.round`:
+  - Runda 1: 2 przyciski kolor (♠♣ Czarna / ♥♦ Czerwona)
+  - Runda 2: 2 przyciski ▲ Wyżej / ▼ Niżej
+  - Runda 3: 2 przyciski ↔ Pomiędzy / ⇤⇥ Poza
+  - Runda 4: 4 przyciski symboli (brakujący podświetlony tęczowo gdy `isRainbowAvailable`)
+  - Zawsze + przycisk „Ciągnij kartę" do zatwierdzenia
+- Etap 2 (pyramid): UI wyboru gracza do picia gdy ręka gracza ma pasującą kartę
+- Etap 3 (tram): wyłącznie tramwajarz widzi ▲▼ + licznik streak 0/5; pozostali widzą widok obserwatora
+
+### UI — widok stołu `src/app/table/[code]/page.tsx`
+
+- Wyświetlanie bieżącego etapu i rundy (np. „Etap 1 — Runda 3/4")
+- Etap 2: wizualizacja piramidy (4 poziomy kart zasłoniętych/odsłoniętych), licznik kolejek per gracz
+- Etap 3: wielki licznik streak (0/5), ostatnia karta referencyjna
+
+### Testy (`tests/game-engine.test.ts`)
+
+- `collectingGuess`: trafienia i pudła dla każdej z 4 rund (+ tęcza: wszyscy piją)
+- Edge case Rundy 3: dwie karty tej samej rangi w ręce (jedyna poprawna odpowiedź = „poza")
+- `pickTramPlayer`: scenariusze remisów (jeden wygrany, wielu z tą samą liczbą kart, identyczne ręce)
+- `tramGuess`: 5-streak sukces, reset po błędzie, poprawna inkrementacja sips
+
+### Uwaga
+
+Grafika UI w tym etapie jest minimalna / robocza — nie tracimy czasu na pixel-perfect.
 
 ---
 

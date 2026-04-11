@@ -3,11 +3,20 @@ import {
   createDeck,
   shuffle,
   createGame,
-  drawCard,
-  nextTurn,
-  isGameOver,
+  compareRank,
+  startCollecting,
+  collectingGuess,
+  isRainbowAvailable,
+  missingSuit,
+  enterPyramid,
+  pyramidNext,
+  pyramidAssignSips,
+  pickTramPlayer,
+  enterTram,
+  tramGuess,
+  type CollectingGuess,
 } from '@/server/game-engine';
-import type { Player } from '@/shared/types';
+import type { Card, Player, RoomState } from '@/shared/types';
 
 // Prosty LCG — deterministyczny RNG do testów
 function seededRng(seed: number): () => number {
@@ -25,8 +34,16 @@ const makePlayers = (count: number): Player[] =>
     joinedAt: 1000 + i,
     sips: 0,
     isConnected: true,
+    hand: [],
   }));
 
+function makeCard(rank: Card['rank'], suit: Card['suit'] = 'spades'): Card {
+  return { rank, suit };
+}
+
+// ----------------------------------------------------------------
+// createDeck
+// ----------------------------------------------------------------
 describe('createDeck', () => {
   it('zwraca 52 karty', () => {
     expect(createDeck()).toHaveLength(52);
@@ -39,6 +56,9 @@ describe('createDeck', () => {
   });
 });
 
+// ----------------------------------------------------------------
+// shuffle
+// ----------------------------------------------------------------
 describe('shuffle', () => {
   it('deterministyczne przy tym samym seedzie', () => {
     const deck = createDeck();
@@ -68,6 +88,19 @@ describe('shuffle', () => {
   });
 });
 
+// ----------------------------------------------------------------
+// compareRank
+// ----------------------------------------------------------------
+describe('compareRank', () => {
+  it('2 < 3', () => expect(compareRank(2, 3)).toBe(-1));
+  it('A > K', () => expect(compareRank('A', 'K')).toBe(1));
+  it('J === J', () => expect(compareRank('J', 'J')).toBe(0));
+  it('10 < J', () => expect(compareRank(10, 'J')).toBe(-1));
+});
+
+// ----------------------------------------------------------------
+// createGame
+// ----------------------------------------------------------------
 describe('createGame', () => {
   it('rzuca przy mniej niż 2 graczach', () => {
     expect(() => createGame(makePlayers(1), seededRng(1))).toThrow();
@@ -78,91 +111,587 @@ describe('createGame', () => {
     expect(state.status).toBe('playing');
     expect(state.deck).toHaveLength(52);
   });
+});
 
-  it('ustawia turę pierwszego gracza', () => {
-    const players = makePlayers(3);
-    const state = createGame(players, seededRng(1));
-    expect(state.currentTurnPlayerId).toBe(players[0].id);
+// ----------------------------------------------------------------
+// startCollecting
+// ----------------------------------------------------------------
+describe('startCollecting', () => {
+  it('ustawia gamePhase collecting, round=1, idx=0', () => {
+    const base = createGame(makePlayers(3), seededRng(1));
+    const state = startCollecting(base, seededRng(2));
+    expect(state.gamePhase).toBe('collecting');
+    expect(state.collecting).toEqual({ round: 1, currentPlayerIdx: 0 });
   });
 
-  it('hostId to pierwszy gracz', () => {
-    const players = makePlayers(2);
-    const state = createGame(players, seededRng(1));
-    expect(state.hostId).toBe(players[0].id);
+  it('czyści ręce i sips graczy', () => {
+    const players = makePlayers(2).map((p) => ({ ...p, hand: [makeCard(5)], sips: 3 }));
+    const base = createGame(players, seededRng(1));
+    const state = startCollecting(base, seededRng(1));
+    expect(state.players.every((p) => p.hand.length === 0)).toBe(true);
+    expect(state.players.every((p) => p.sips === 0)).toBe(true);
   });
 
-  it('inicjalizuje pustą tablicę drawnCards', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    expect(state.drawnCards).toEqual([]);
+  it('nowa potasowana talia 52 kart', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = startCollecting(base, seededRng(1));
+    expect(state.deck).toHaveLength(52);
   });
 });
 
-describe('drawCard', () => {
-  it('rzuca gdy nie tura tego gracza', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    expect(() => drawCard(state, 'p2')).toThrow('Nie twoja tura');
+// ----------------------------------------------------------------
+// isRainbowAvailable / missingSuit
+// ----------------------------------------------------------------
+describe('isRainbowAvailable', () => {
+  it('false gdy mniej niż 3 karty', () => {
+    expect(isRainbowAvailable([makeCard(5, 'hearts'), makeCard(7, 'spades')])).toBe(false);
   });
 
-  it('rzuca gdy gra nie jest w toku', () => {
-    const state = { ...createGame(makePlayers(2), seededRng(1)), status: 'ended' as const };
-    expect(() => drawCard(state, 'p1')).toThrow('Gra nie jest w toku');
+  it('false gdy 3 karty ale dwa te same symbole', () => {
+    expect(
+      isRainbowAvailable([
+        makeCard(5, 'hearts'),
+        makeCard(7, 'hearts'),
+        makeCard(9, 'spades'),
+      ]),
+    ).toBe(false);
   });
 
-  it('zmniejsza talię o 1', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    const { state: after } = drawCard(state, 'p1');
-    expect(after.deck).toHaveLength(51);
-  });
-
-  it('dopisuje kartę do drawnCards', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    const { state: after, card } = drawCard(state, 'p1');
-    expect(after.drawnCards).toHaveLength(1);
-    expect(after.drawnCards[0]).toEqual(card);
-  });
-
-  it('zwraca tę samą kartę co top talii', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    const topCard = state.deck[0];
-    const { card } = drawCard(state, 'p1');
-    expect(card).toEqual(topCard);
+  it('true gdy 3 karty 3 różne symbole', () => {
+    expect(
+      isRainbowAvailable([
+        makeCard(5, 'hearts'),
+        makeCard(7, 'spades'),
+        makeCard(9, 'clubs'),
+      ]),
+    ).toBe(true);
   });
 });
 
-describe('nextTurn', () => {
-  it('cyklicznie przechodzi po graczach (3 graczy)', () => {
-    const state = createGame(makePlayers(3), seededRng(1));
-    // tura: p1 → p2 → p3 → p1
-    const s1 = nextTurn(state);
-    expect(s1.currentTurnPlayerId).toBe('p2');
-    const s2 = nextTurn(s1);
-    expect(s2.currentTurnPlayerId).toBe('p3');
-    const s3 = nextTurn(s2);
-    expect(s3.currentTurnPlayerId).toBe('p1');
+describe('missingSuit', () => {
+  it('zwraca brakujący symbol', () => {
+    const hand: Card[] = [
+      makeCard(5, 'hearts'),
+      makeCard(7, 'spades'),
+      makeCard(9, 'clubs'),
+    ];
+    expect(missingSuit(hand)).toBe('diamonds');
   });
 
-  it('kończy grę gdy talia pusta', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    const emptyState = { ...state, deck: [] };
-    const after = nextTurn(emptyState);
-    expect(after.status).toBe('ended');
-    expect(after.currentTurnPlayerId).toBeNull();
+  it('zwraca null gdy nie spełnia warunku tęczy', () => {
+    expect(missingSuit([makeCard(5, 'hearts'), makeCard(7, 'spades')])).toBeNull();
   });
 });
 
-describe('isGameOver', () => {
-  it('false gdy talia niepusta i status playing', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    expect(isGameOver(state)).toBe(false);
+// ----------------------------------------------------------------
+// collectingGuess — Runda 1 (kolor)
+// ----------------------------------------------------------------
+describe('collectingGuess — Runda 1', () => {
+  function stateR1WithTopCard(topCard: Card): RoomState {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const started = startCollecting(base, seededRng(1));
+    // Podmieniamy deck żeby top był znany
+    return {
+      ...started,
+      deck: [topCard, ...started.deck.slice(1)],
+    };
+  }
+
+  it('trafienie czarnej — gracz nie pije, karta w ręce', () => {
+    const state = stateR1WithTopCard(makeCard(7, 'spades')); // czarna
+    const guess: CollectingGuess = { kind: 'color', value: 'black' };
+    const result = collectingGuess(state, 'p1', guess, seededRng(1));
+    expect(result.correct).toBe(true);
+    expect(result.sipsAwarded).toBe(0);
+    const p1 = result.state.players.find((p) => p.id === 'p1')!;
+    expect(p1.hand).toHaveLength(1);
+    expect(p1.sips).toBe(0);
   });
 
-  it('true gdy talia pusta', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    expect(isGameOver({ ...state, deck: [] })).toBe(true);
+  it('pudło — gracz pije 1, karta trafia do ręki', () => {
+    const state = stateR1WithTopCard(makeCard(7, 'hearts')); // czerwona
+    const guess: CollectingGuess = { kind: 'color', value: 'black' };
+    const result = collectingGuess(state, 'p1', guess, seededRng(1));
+    expect(result.correct).toBe(false);
+    expect(result.sipsAwarded).toBe(1);
+    const p1 = result.state.players.find((p) => p.id === 'p1')!;
+    expect(p1.hand).toHaveLength(1);
+    expect(p1.sips).toBe(1);
+  });
+});
+
+// ----------------------------------------------------------------
+// collectingGuess — Runda 2 (wyżej/niżej)
+// ----------------------------------------------------------------
+describe('collectingGuess — Runda 2', () => {
+  function stateR2(hand0: Card, topCard: Card): RoomState {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = startCollecting(base, () => 0);
+    // Ustawiamy p1 z jedną kartą w ręce (symulacja po R1) i p2 bez
+    const players = state.players.map((p) =>
+      p.id === 'p1' ? { ...p, hand: [hand0] } : p,
+    );
+    return {
+      ...state,
+      deck: [topCard, ...createDeck().slice(2)],
+      players,
+      collecting: { round: 2, currentPlayerIdx: 0 },
+    };
+  }
+
+  it('wyżej — trafienie', () => {
+    const s = stateR2(makeCard(5, 'hearts'), makeCard(9, 'spades'));
+    const r = collectingGuess(s, 'p1', { kind: 'hiLo', value: 'higher' }, seededRng(1));
+    expect(r.correct).toBe(true);
   });
 
-  it('true gdy status ended', () => {
-    const state = createGame(makePlayers(2), seededRng(1));
-    expect(isGameOver({ ...state, status: 'ended' })).toBe(true);
+  it('niżej — trafienie', () => {
+    const s = stateR2(makeCard(9, 'hearts'), makeCard(3, 'spades'));
+    const r = collectingGuess(s, 'p1', { kind: 'hiLo', value: 'lower' }, seededRng(1));
+    expect(r.correct).toBe(true);
+  });
+
+  it('remis rang = błąd', () => {
+    const s = stateR2(makeCard(7, 'hearts'), makeCard(7, 'spades'));
+    const r = collectingGuess(s, 'p1', { kind: 'hiLo', value: 'higher' }, seededRng(1));
+    expect(r.correct).toBe(false);
+    expect(r.sipsAwarded).toBe(1);
+  });
+});
+
+// ----------------------------------------------------------------
+// collectingGuess — Runda 3 (pomiędzy/poza)
+// ----------------------------------------------------------------
+describe('collectingGuess — Runda 3', () => {
+  function stateR3(hand: [Card, Card], topCard: Card): RoomState {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = startCollecting(base, () => 0);
+    const players = state.players.map((p) =>
+      p.id === 'p1' ? { ...p, hand: [...hand] } : p,
+    );
+    return {
+      ...state,
+      deck: [topCard, ...createDeck().slice(3)],
+      players,
+      collecting: { round: 3, currentPlayerIdx: 0 },
+    };
+  }
+
+  it('pomiędzy (ścisłe) — trafienie', () => {
+    const s = stateR3([makeCard(3), makeCard(9)], makeCard(6));
+    const r = collectingGuess(s, 'p1', { kind: 'inOut', value: 'inside' }, seededRng(1));
+    expect(r.correct).toBe(true);
+  });
+
+  it('poza — trafienie', () => {
+    const s = stateR3([makeCard(3), makeCard(9)], makeCard('K'));
+    const r = collectingGuess(s, 'p1', { kind: 'inOut', value: 'outside' }, seededRng(1));
+    expect(r.correct).toBe(true);
+  });
+
+  it('karta na granicy zakresu = poza', () => {
+    const s = stateR3([makeCard(3), makeCard(9)], makeCard(9)); // ranga = górna granica
+    const rIn = collectingGuess(s, 'p1', { kind: 'inOut', value: 'inside' }, seededRng(1));
+    expect(rIn.correct).toBe(false);
+    const s2 = stateR3([makeCard(3), makeCard(9)], makeCard(9));
+    const rOut = collectingGuess(s2, 'p1', { kind: 'inOut', value: 'outside' }, seededRng(1));
+    expect(rOut.correct).toBe(true);
+  });
+
+  it('edge case: obie karty tej samej rangi — tylko "poza" poprawne', () => {
+    const s = stateR3([makeCard(7), makeCard(7)], makeCard(7));
+    const rIn = collectingGuess(s, 'p1', { kind: 'inOut', value: 'inside' }, seededRng(1));
+    expect(rIn.correct).toBe(false);
+    const s2 = stateR3([makeCard(7), makeCard(7)], makeCard(7));
+    const rOut = collectingGuess(s2, 'p1', { kind: 'inOut', value: 'outside' }, seededRng(1));
+    expect(rOut.correct).toBe(true);
+  });
+});
+
+// ----------------------------------------------------------------
+// collectingGuess — Runda 4 (symbol + tęcza)
+// ----------------------------------------------------------------
+describe('collectingGuess — Runda 4 (symbol + tęcza)', () => {
+  function stateR4(hand: [Card, Card, Card], topCard: Card): RoomState {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = startCollecting(base, () => 0);
+    const players = state.players.map((p) =>
+      p.id === 'p1' ? { ...p, hand: [...hand] } : p,
+    );
+    return {
+      ...state,
+      deck: [topCard, ...createDeck().slice(4)],
+      players,
+      collecting: { round: 4, currentPlayerIdx: 0 },
+    };
+  }
+
+  it('trafienie symbolu — nikt nie pije', () => {
+    // Ręka z 2 symbolami (nie kwalifikuje się do tęczy)
+    const s = stateR4(
+      [makeCard(3, 'hearts'), makeCard(5, 'hearts'), makeCard(7, 'clubs')],
+      makeCard('K', 'spades'),
+    );
+    const r = collectingGuess(s, 'p1', { kind: 'suit', value: 'spades' }, seededRng(1));
+    expect(r.correct).toBe(true);
+    expect(r.rainbowTriggered).toBe(false);
+    expect(r.sipsAwarded).toBe(0);
+  });
+
+  it('pudło symbolu — gracz pije 1', () => {
+    const s = stateR4(
+      [makeCard(3, 'hearts'), makeCard(5, 'spades'), makeCard(7, 'clubs')],
+      makeCard('K', 'diamonds'),
+    );
+    const r = collectingGuess(s, 'p1', { kind: 'suit', value: 'hearts' }, seededRng(1));
+    expect(r.correct).toBe(false);
+    expect(r.sipsAwarded).toBe(1);
+  });
+
+  it('tęcza — wybór brakującego symbolu i trafienie → wszyscy inni piją', () => {
+    // hand: hearts, spades, clubs → brakuje diamonds
+    const hand: [Card, Card, Card] = [
+      makeCard(3, 'hearts'),
+      makeCard(5, 'spades'),
+      makeCard(7, 'clubs'),
+    ];
+    const s = stateR4(hand, makeCard('K', 'diamonds'));
+    const r = collectingGuess(s, 'p1', { kind: 'suit', value: 'diamonds' }, seededRng(1));
+    expect(r.correct).toBe(true);
+    expect(r.rainbowTriggered).toBe(true);
+    // p1 nie pije, p2 pije 1
+    const p1 = r.state.players.find((p) => p.id === 'p1')!;
+    const p2 = r.state.players.find((p) => p.id === 'p2')!;
+    expect(p1.sips).toBe(0);
+    expect(p2.sips).toBe(1);
+  });
+
+  it('tęcza — wybór tęczowego symbolu ale pudło → tylko gracz pije', () => {
+    // hand: hearts, spades, clubs → brakuje diamonds; ale karta to hearts
+    const hand: [Card, Card, Card] = [
+      makeCard(3, 'hearts'),
+      makeCard(5, 'spades'),
+      makeCard(7, 'clubs'),
+    ];
+    const s = stateR4(hand, makeCard('K', 'hearts'));
+    const r = collectingGuess(s, 'p1', { kind: 'suit', value: 'diamonds' }, seededRng(1));
+    expect(r.correct).toBe(false);
+    expect(r.rainbowTriggered).toBe(false);
+    const p1 = r.state.players.find((p) => p.id === 'p1')!;
+    const p2 = r.state.players.find((p) => p.id === 'p2')!;
+    expect(p1.sips).toBe(1);
+    expect(p2.sips).toBe(0);
+  });
+});
+
+// ----------------------------------------------------------------
+// Przejście Etap 1 → Etap 2 (pełny flow 2 graczy, 8 guess)
+// ----------------------------------------------------------------
+describe('przejście collecting → pyramid po R4 ostatniego gracza', () => {
+  it('gamePhase=pyramid po 8 poprawnych zgadywaniach (2 gracze)', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    let state = startCollecting(base, seededRng(1));
+
+    // 4 rundy × 2 graczy = 8 guess; używamy koloru żeby przejść prostą ścieżkę
+    for (let round = 1; round <= 4; round++) {
+      for (let gi = 0; gi < 2; gi++) {
+        const col = state.collecting!;
+        const player = state.players[col.currentPlayerIdx];
+        let guess: CollectingGuess;
+        const topCard = state.deck[0];
+        switch (round) {
+          case 1:
+            guess = {
+              kind: 'color',
+              value:
+                topCard.suit === 'spades' || topCard.suit === 'clubs' ? 'black' : 'red',
+            };
+            break;
+          case 2: {
+            const hand0 = player.hand[0];
+            const cmp =
+              ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(String(topCard.rank)) -
+              ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(String(hand0.rank));
+            guess = { kind: 'hiLo', value: cmp >= 0 ? 'higher' : 'lower' };
+            break;
+          }
+          case 3: {
+            const r0i = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(String(player.hand[0].rank));
+            const r1i = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(String(player.hand[1].rank));
+            const rdi = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(String(topCard.rank));
+            const lo = Math.min(r0i, r1i); const hi = Math.max(r0i, r1i);
+            guess = { kind: 'inOut', value: (lo !== hi && rdi > lo && rdi < hi) ? 'inside' : 'outside' };
+            break;
+          }
+          default:
+            guess = { kind: 'suit', value: topCard.suit };
+        }
+        const result = collectingGuess(state, player.id, guess, seededRng(round * 10 + gi));
+        state = result.state;
+        if (state.gamePhase === 'pyramid') break;
+      }
+      if (state.gamePhase === 'pyramid') break;
+    }
+
+    expect(state.gamePhase).toBe('pyramid');
+    expect(state.collecting).toBeNull();
+    expect(state.pyramid).not.toBeNull();
+  });
+});
+
+// ----------------------------------------------------------------
+// enterPyramid
+// ----------------------------------------------------------------
+describe('enterPyramid', () => {
+  it('layout ma 4 poziomy z 1/2/3/4 kartami', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = startCollecting(base, seededRng(1));
+    const py = enterPyramid(state);
+    expect(py.pyramid!.layout).toHaveLength(4);
+    expect(py.pyramid!.layout[0]).toHaveLength(1);
+    expect(py.pyramid!.layout[1]).toHaveLength(2);
+    expect(py.pyramid!.layout[2]).toHaveLength(3);
+    expect(py.pyramid!.layout[3]).toHaveLength(4);
+  });
+
+  it('deck zmniejsza się o 10', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = startCollecting(base, seededRng(1));
+    const deckBefore = state.deck.length;
+    const py = enterPyramid(state);
+    expect(py.deck.length).toBe(deckBefore - 10);
+  });
+});
+
+// ----------------------------------------------------------------
+// pyramidAssignSips
+// ----------------------------------------------------------------
+describe('pyramidAssignSips', () => {
+  function pyramidStateWithCurrentCard(): RoomState {
+    const base = createGame(makePlayers(3), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    // Daj p1 kartę o randze 7
+    const p1Card: Card = { rank: 7, suit: 'hearts' };
+    const players = collecting.players.map((p) =>
+      p.id === 'p1' ? { ...p, hand: [p1Card] } : p,
+    );
+    const pyState = enterPyramid({ ...collecting, players });
+    // Ustaw currentCard na kartę o tej samej randze (7) — ręcznie
+    const fakeCurrentCard: Card = { rank: 7, suit: 'spades' };
+    // Wstaw ją do layout[0][0] i oznacz jako odkrytą
+    const layout = [[fakeCurrentCard], ...pyState.pyramid!.layout.slice(1)];
+    return {
+      ...pyState,
+      pyramid: {
+        ...pyState.pyramid!,
+        layout,
+        currentCard: fakeCurrentCard,
+        revealedLevels: 0,
+        revealedInLevel: 1,
+      },
+    };
+  }
+
+  it('dodaje N łyków graczowi (N = poziom 1)', () => {
+    const state = pyramidStateWithCurrentCard();
+    const result = pyramidAssignSips(state, 'p1', 'p2');
+    expect(result.sipsAwarded).toBe(1);
+    const p2 = result.state.players.find((p) => p.id === 'p2')!;
+    expect(p2.sips).toBe(1);
+  });
+
+  it('usuwa kartę z ręki gracza przypisującego', () => {
+    const state = pyramidStateWithCurrentCard();
+    const result = pyramidAssignSips(state, 'p1', 'p2');
+    const p1 = result.state.players.find((p) => p.id === 'p1')!;
+    expect(p1.hand).toHaveLength(0);
+  });
+
+  it('rzuca gdy brak pasującej rangi w ręce', () => {
+    const state = pyramidStateWithCurrentCard();
+    // p2 nie ma żadnej karty
+    expect(() => pyramidAssignSips(state, 'p2', 'p3')).toThrow();
+  });
+
+  it('rzuca gdy from === to', () => {
+    const state = pyramidStateWithCurrentCard();
+    expect(() => pyramidAssignSips(state, 'p1', 'p1')).toThrow();
+  });
+});
+
+// ----------------------------------------------------------------
+// pyramidNext
+// ----------------------------------------------------------------
+describe('pyramidNext', () => {
+  it('odsłania kartę i zeruje pendingSipsByPlayer', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    const py = enterPyramid(collecting);
+    const stateWithSips = {
+      ...py,
+      pyramid: {
+        ...py.pyramid!,
+        pendingSipsByPlayer: { p1: 3 },
+      },
+    };
+    const result = pyramidNext(stateWithSips, seededRng(1));
+    expect(result.card).toBeDefined();
+    expect(result.state.pyramid!.pendingSipsByPlayer).toEqual({});
+    expect(result.state.pyramid!.currentCard).toEqual(result.card);
+  });
+
+  it('po 10 odsłonięciach przechodzi do gamePhase=tram', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    let state = enterPyramid(collecting);
+    for (let i = 0; i < 10; i++) {
+      const r = pyramidNext(state, seededRng(i + 1));
+      state = r.state;
+    }
+    expect(state.gamePhase).toBe('tram');
+    expect(state.tram).not.toBeNull();
+    expect(state.tram!.streak).toBe(0);
+    expect(state.tram!.lastCard).toBeNull();
+  });
+});
+
+// ----------------------------------------------------------------
+// pickTramPlayer
+// ----------------------------------------------------------------
+describe('pickTramPlayer', () => {
+  it('wybiera gracza z największą ręką', () => {
+    const players: Player[] = [
+      { ...makePlayers(3)[0], hand: [makeCard(5)] },
+      { ...makePlayers(3)[1], id: 'p2', hand: [makeCard(5), makeCard(7)] },
+      { ...makePlayers(3)[2], id: 'p3', hand: [] },
+    ];
+    const base = createGame(makePlayers(3), seededRng(1));
+    const state = { ...base, players };
+    expect(pickTramPlayer(state, seededRng(1))).toBe('p2');
+  });
+
+  it('tiebreaker: przy remisie liczby kart — przegrywa ten z niższą najwyższą kartą', () => {
+    // p1: [Q], p2: [5] → p2 ma niższą najwyższą → jedzie tramwajem
+    const players: Player[] = [
+      { ...makePlayers(2)[0], hand: [makeCard('Q', 'hearts')] },
+      { ...makePlayers(2)[1], id: 'p2', hand: [makeCard(5, 'spades')] },
+    ];
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = { ...base, players };
+    expect(pickTramPlayer(state, seededRng(1))).toBe('p2');
+  });
+
+  it('tiebreaker dalszy: jeśli pierwsza karta remis — porównuje drugą', () => {
+    // p1: [K, 5], p2: [K, 3] → druga karta: p2 niższa → p2 jedzie
+    const players: Player[] = [
+      { ...makePlayers(2)[0], hand: [makeCard('K'), makeCard(5)] },
+      { ...makePlayers(2)[1], id: 'p2', hand: [makeCard('K'), makeCard(3)] },
+    ];
+    const base = createGame(makePlayers(2), seededRng(1));
+    const state = { ...base, players };
+    expect(pickTramPlayer(state, seededRng(1))).toBe('p2');
+  });
+});
+
+// ----------------------------------------------------------------
+// tramGuess
+// ----------------------------------------------------------------
+describe('tramGuess', () => {
+  function tramState(): RoomState {
+    const base = createGame(makePlayers(2), seededRng(1));
+    return enterTram(base, 'p1', seededRng(1));
+  }
+
+  it('pierwsza karta = referencyjna (bez zgadywania)', () => {
+    const state = tramState();
+    const r = tramGuess(state, 'p1', 'reference', seededRng(1));
+    expect(r.isReference).toBe(true);
+    expect(r.correct).toBe(true);
+    expect(r.state.tram!.lastCard).toEqual(r.card);
+    expect(r.state.tram!.streak).toBe(0);
+  });
+
+  it('trafienie — streak rośnie', () => {
+    let state = tramState();
+    // Ciągniemy referencyjną
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+    // Wymuszamy drugą kartę wyższą — ręcznie ustawiamy deck
+    const higherCard: Card = { rank: 'A', suit: 'hearts' };
+    const lowerRefCard: Card = { rank: 2, suit: 'spades' };
+    state = {
+      ...state,
+      tram: { ...state.tram!, lastCard: lowerRefCard, deck: [higherCard, ...state.tram!.deck.slice(1)] },
+    };
+    const r1 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    expect(r1.correct).toBe(true);
+    expect(r1.state.tram!.streak).toBe(1);
+  });
+
+  it('pudło — gracz pije, streak resetowany, nowa talia', () => {
+    let state = tramState();
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+    // Wymusz pudło: karta wyżej, guess lower
+    const higherCard: Card = { rank: 'A', suit: 'hearts' };
+    const lowerRefCard: Card = { rank: 2, suit: 'spades' };
+    state = {
+      ...state,
+      tram: { ...state.tram!, lastCard: lowerRefCard, deck: [higherCard, ...state.tram!.deck.slice(1)], streak: 3 },
+    };
+    const r1 = tramGuess(state, 'p1', 'lower', seededRng(1));
+    expect(r1.correct).toBe(false);
+    expect(r1.state.tram!.streak).toBe(0);
+    expect(r1.state.tram!.lastCard).toBeNull(); // nowa talia
+    const p1 = r1.state.players.find((p) => p.id === 'p1')!;
+    expect(p1.sips).toBe(1);
+  });
+
+  it('5-streak sukces → gamePhase=ended, winnerId ustawiony', () => {
+    let state = tramState();
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+
+    // Symulujemy 5 trafień ręcznie przez podmianę deck + lastCard
+    const cards: Card[] = [
+      { rank: 3, suit: 'spades' },
+      { rank: 5, suit: 'hearts' },
+      { rank: 7, suit: 'clubs' },
+      { rank: 9, suit: 'diamonds' },
+      { rank: 'J', suit: 'spades' },
+    ];
+    // lastCard = 2, cards rosnąco → wszystkie 'higher' poprawne
+    state = {
+      ...state,
+      tram: { ...state.tram!, lastCard: { rank: 2, suit: 'spades' }, deck: cards, streak: 0 },
+    };
+
+    for (let i = 0; i < 5; i++) {
+      const r = tramGuess(state, 'p1', 'higher', seededRng(i));
+      state = r.state;
+      if (state.gamePhase === 'ended') break;
+    }
+
+    expect(state.gamePhase).toBe('ended');
+    expect(state.winnerId).toBe('p1');
+    expect(state.status).toBe('ended');
+  });
+
+  it('remis rang w tramwaju = błąd', () => {
+    let state = tramState();
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+    const sameRankCard: Card = { rank: state.tram!.lastCard!.rank, suit: 'clubs' };
+    state = {
+      ...state,
+      tram: { ...state.tram!, deck: [sameRankCard, ...state.tram!.deck.slice(1)] },
+    };
+    const r1 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    expect(r1.correct).toBe(false);
+  });
+
+  it('rzuca gdy nie jesteś tramwajarzem', () => {
+    const state = tramState();
+    expect(() => tramGuess(state, 'p2', 'reference', seededRng(1))).toThrow();
   });
 });

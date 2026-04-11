@@ -6,7 +6,34 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/Card';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
 import { getSocket } from '@/lib/socket-client';
-import type { Card as CardType } from '@/shared/types';
+import type { Card as CardType, Suit } from '@/shared/types';
+
+const RANK_ORDER = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K', 'A'] as const;
+
+function sortHand(hand: CardType[]): CardType[] {
+  return [...hand].sort(
+    (a, b) => RANK_ORDER.indexOf(a.rank as never) - RANK_ORDER.indexOf(b.rank as never),
+  );
+}
+
+function isRainbowAvailable(hand: CardType[]): boolean {
+  if (hand.length !== 3) return false;
+  return new Set(hand.map((c) => c.suit)).size === 3;
+}
+
+function missingSuit(hand: CardType[]): Suit | null {
+  if (!isRainbowAvailable(hand)) return null;
+  const suits: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
+  const present = new Set(hand.map((c) => c.suit));
+  return suits.find((s) => !present.has(s)) ?? null;
+}
+
+const SUIT_LABELS: Record<Suit, string> = {
+  spades: '♠ Pik',
+  clubs: '♣ Trefl',
+  diamonds: '♦ Karo',
+  hearts: '♥ Kier',
+};
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -19,13 +46,12 @@ export default function RoomPage() {
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [joinNick, setJoinNick] = useState('');
   const [joining, setJoining] = useState(false);
-  const [myLastCard, setMyLastCard] = useState<CardType | null>(null);
-  const [myLastCardKey, setMyLastCardKey] = useState(0);
   const [reconnecting, setReconnecting] = useState(true);
 
-  // Śledzenie poprzedniego statusu połączenia żeby nie pokazywać toastu przy pierwszym connect
+  // Dla Etapu 1 — wybrana odpowiedź przed zatwierdzeniem
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+
   const prevConnectionStatus = useRef<string | null>(null);
-  // Flaga: czy był kiedykolwiek disconnect po mount (żeby nie rejoinować przy pierwszym connect)
   const wasDisconnected = useRef(false);
 
   // Na mount: spróbuj rejoin przez token z localStorage
@@ -79,25 +105,15 @@ export default function RoomPage() {
     }
   }, [connectionStatus]);
 
-  // Toast dla błędów z serwera (event 'error')
+  // Toast dla błędów z serwera
   useEffect(() => {
     if (error) toast.error(error);
   }, [error]);
 
-  // Nasłuchuj game:card_drawn żeby śledzić własną ostatnio wyciągniętą kartę
+  // Reset selectedAnswer przy zmianie tury
   useEffect(() => {
-    const socket = getSocket();
-    const handler = (data: { card: CardType; byPlayerId: string }) => {
-      if (data.byPlayerId === myPlayerId) {
-        setMyLastCard(data.card);
-        setMyLastCardKey((k) => k + 1);
-      }
-    };
-    socket.on('game:card_drawn', handler);
-    return () => {
-      socket.off('game:card_drawn', handler);
-    };
-  }, [myPlayerId]);
+    setSelectedAnswer(null);
+  }, [state?.collecting?.currentPlayerIdx, state?.collecting?.round]);
 
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
@@ -128,16 +144,34 @@ export default function RoomPage() {
     await emit('game:start', {});
   }, [emit]);
 
-  const handleDraw = useCallback(async () => {
-    await emit('game:drawCard', {});
-  }, [emit]);
-
   const handleLeave = useCallback(async () => {
     await emit('room:leave', {});
     localStorage.removeItem(`tram:token:${code}`);
     localStorage.removeItem(`tram:playerId:${code}`);
     router.push('/');
   }, [emit, code, router]);
+
+  const handleCollectingGuess = useCallback(async () => {
+    if (!selectedAnswer) return;
+    const res = await emit('game:collectingGuess', { answer: selectedAnswer });
+    if (!res.ok) toast.error(res.error);
+    setSelectedAnswer(null);
+  }, [selectedAnswer, emit]);
+
+  const handlePyramidNext = useCallback(async () => {
+    const res = await emit('game:pyramidNext', {});
+    if (!res.ok) toast.error(res.error);
+  }, [emit]);
+
+  const handlePyramidAssign = useCallback(async (toPlayerId: string) => {
+    const res = await emit('game:pyramidAssign', { toPlayerId });
+    if (!res.ok) toast.error(res.error);
+  }, [emit]);
+
+  const handleTramGuess = useCallback(async (answer: 'higher' | 'lower' | 'reference') => {
+    const res = await emit('game:tramGuess', { answer });
+    if (!res.ok) toast.error(res.error);
+  }, [emit]);
 
   // --- Rendering ---
 
@@ -149,7 +183,6 @@ export default function RoomPage() {
     );
   }
 
-  // Nie dołączyliśmy jeszcze — pokaż formularz dołączenia
   if (!myPlayerId) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 max-w-sm mx-auto">
@@ -192,17 +225,46 @@ export default function RoomPage() {
   }
 
   const amHost = state.hostPlayerId === myPlayerId;
-  const isMyTurn = state.currentPlayerId === myPlayerId;
-  const currentPlayer = state.players.find((p) => p.id === state.currentPlayerId);
+  const myHand = sortHand(state.handsByPlayerId[myPlayerId ?? ''] ?? []);
+  const myIdx = state.players.findIndex((p) => p.id === myPlayerId);
+
+  // Wachlarz kart (widoczny we wszystkich fazach gry)
+  const HandFan = myHand.length > 0 ? (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-end justify-center z-10">
+      {myHand.map((card, i) => {
+        const offset = (i - (myHand.length - 1) / 2) * 28;
+        const rotate = (i - (myHand.length - 1) / 2) * 5;
+        return (
+          <div
+            key={`${card.rank}-${card.suit}`}
+            className="absolute transition-all duration-300"
+            style={{ transform: `translateX(${offset}px) rotate(${rotate}deg) translateY(12px)` }}
+          >
+            <Card card={card} size="sm" />
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
 
   return (
-    <main className="min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto">
+    <main className="min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-32">
       {/* Header */}
       <div className="pt-2">
         <p className="text-xs text-muted-foreground uppercase tracking-widest">Kod pokoju</p>
         <h1 className="text-4xl font-bold font-mono tracking-widest">{state.code}</h1>
-        {state.status === 'playing' && (
-          <p className="text-sm text-muted-foreground">Kart w talii: {state.cardsLeft}</p>
+        {state.gamePhase === 'collecting' && state.collecting && (
+          <p className="text-sm text-muted-foreground">
+            Etap 1 — Runda {state.collecting.round}/4
+          </p>
+        )}
+        {state.gamePhase === 'pyramid' && (
+          <p className="text-sm text-muted-foreground">Etap 2 — Piramida</p>
+        )}
+        {state.gamePhase === 'tram' && state.tram && (
+          <p className="text-sm text-muted-foreground">
+            Etap 3 — Tramwaj (streak {state.tram.streak}/5)
+          </p>
         )}
       </div>
 
@@ -210,7 +272,11 @@ export default function RoomPage() {
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gracze</p>
         {state.players.map((player) => {
-          const isCurrentTurn = state.currentPlayerId === player.id && state.status === 'playing';
+          const isCurrentTurn =
+            state.status === 'playing' &&
+            (state.collecting
+              ? state.players[state.collecting.currentPlayerIdx]?.id === player.id
+              : state.currentPlayerId === player.id);
           return (
             <div
               key={player.id}
@@ -226,7 +292,7 @@ export default function RoomPage() {
               {player.id === state.hostPlayerId && (
                 <span className="text-xs opacity-70">(host)</span>
               )}
-              {state.status === 'ended' && (
+              {(state.status === 'ended' || state.gamePhase !== null) && (
                 <span className="text-xs ml-1">🍺 {player.sips}</span>
               )}
             </div>
@@ -234,7 +300,7 @@ export default function RoomPage() {
         })}
       </div>
 
-      {/* Akcje zależne od stanu */}
+      {/* Oczekiwanie na start */}
       {state.status === 'waiting' && (
         <div className="flex flex-col gap-3 mt-2">
           {amHost ? (
@@ -260,41 +326,273 @@ export default function RoomPage() {
         </div>
       )}
 
-      {state.status === 'playing' && (
-        <div className="flex flex-col gap-4 mt-2">
-          {isMyTurn ? (
-            <Button
-              className="h-24 text-2xl w-full"
-              onClick={handleDraw}
-            >
-              Ciągnij kartę
-            </Button>
-          ) : (
-            <p className="text-center text-xl py-4">
-              Tura:{' '}
-              <strong>{currentPlayer?.nick ?? '...'}</strong>
-            </p>
-          )}
+      {/* Etap 1 — Zbieranie */}
+      {state.gamePhase === 'collecting' && state.collecting && (() => {
+        const col = state.collecting;
+        const isMyTurn = state.players[col.currentPlayerIdx]?.id === myPlayerId;
+        const currentPlayer = state.players[col.currentPlayerIdx];
+        const rainbowAvail = isMyTurn && isRainbowAvailable(myHand);
+        const missing = rainbowAvail ? missingSuit(myHand) : null;
 
-          {/* Własna ostatnia karta z animacją */}
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Twoja ostatnia karta
-            </p>
-            {myLastCard ? (
-              <div key={myLastCardKey} className="card-in">
-                <Card card={myLastCard} size="lg" />
-              </div>
+        return (
+          <div className="flex flex-col gap-4 mt-2">
+            {!isMyTurn ? (
+              <p className="text-center text-xl py-4">
+                Tura: <strong>{currentPlayer?.nick ?? '...'}</strong>
+              </p>
             ) : (
-              <p className="text-3xl text-muted-foreground">—</p>
+              <>
+                <p className="text-center text-sm text-muted-foreground font-medium">Twoja tura! Wybierz odpowiedź:</p>
+
+                {/* Runda 1: kolor */}
+                {col.round === 1 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['black', 'red'] as const).map((v) => (
+                      <Button
+                        key={v}
+                        variant={selectedAnswer === v ? 'default' : 'outline'}
+                        className="h-16 text-lg"
+                        onClick={() => setSelectedAnswer(v)}
+                      >
+                        {v === 'black' ? '♠♣ Czarna' : '♥♦ Czerwona'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Runda 2: wyżej/niżej */}
+                {col.round === 2 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant={selectedAnswer === 'higher' ? 'default' : 'outline'}
+                      className="h-16 text-lg"
+                      onClick={() => setSelectedAnswer('higher')}
+                    >
+                      ▲ Wyżej
+                    </Button>
+                    <Button
+                      variant={selectedAnswer === 'lower' ? 'default' : 'outline'}
+                      className="h-16 text-lg"
+                      onClick={() => setSelectedAnswer('lower')}
+                    >
+                      ▼ Niżej
+                    </Button>
+                  </div>
+                )}
+
+                {/* Runda 3: pomiędzy/poza */}
+                {col.round === 3 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant={selectedAnswer === 'inside' ? 'default' : 'outline'}
+                      className="h-16 text-lg"
+                      onClick={() => setSelectedAnswer('inside')}
+                    >
+                      ↔ Pomiędzy
+                    </Button>
+                    <Button
+                      variant={selectedAnswer === 'outside' ? 'default' : 'outline'}
+                      className="h-16 text-lg"
+                      onClick={() => setSelectedAnswer('outside')}
+                    >
+                      ⇤⇥ Poza
+                    </Button>
+                  </div>
+                )}
+
+                {/* Runda 4: symbol */}
+                {col.round === 4 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['spades', 'clubs', 'diamonds', 'hearts'] as Suit[]).map((suit) => {
+                      const isRainbow = suit === missing;
+                      return (
+                        <Button
+                          key={suit}
+                          variant={selectedAnswer === suit ? 'default' : 'outline'}
+                          className={`h-16 text-lg relative ${isRainbow ? 'ring-2 ring-offset-1 ring-purple-500 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900' : ''}`}
+                          onClick={() => setSelectedAnswer(suit)}
+                        >
+                          {SUIT_LABELS[suit]}
+                          {isRainbow && <span className="absolute top-1 right-1 text-xs">🌈</span>}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <Button
+                  className="h-14 text-xl w-full mt-2"
+                  disabled={!selectedAnswer}
+                  onClick={handleCollectingGuess}
+                >
+                  Ciągnij kartę
+                </Button>
+              </>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
+      {/* Etap 2 — Piramida */}
+      {state.gamePhase === 'pyramid' && state.pyramid && (() => {
+        const py = state.pyramid;
+        const currentCard = py.currentCard;
+        // Karty w ręce pasujące do aktualnej karty piramidy
+        const matchingCards = currentCard
+          ? myHand.filter((c) => c.rank === currentCard.rank)
+          : [];
+        const canAssign = matchingCards.length > 0;
+        const otherPlayers = state.players.filter((p) => p.id !== myPlayerId);
+
+        return (
+          <div className="flex flex-col gap-4 mt-2">
+            {currentCard ? (
+              <>
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest">Odkryta karta</p>
+                  <Card card={currentCard} size="lg" />
+                </div>
+
+                {canAssign && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium text-center">
+                      Masz kartę o tej randze! Każ komuś pić:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {otherPlayers.map((p) => (
+                        <Button
+                          key={p.id}
+                          variant="outline"
+                          className="h-12"
+                          onClick={() => handlePyramidAssign(p.id)}
+                        >
+                          {p.nick}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!canAssign && (
+                  <p className="text-center text-muted-foreground py-2">
+                    Nie masz pasującej karty.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">
+                Czekaj na odsłonięcie karty piramidy…
+              </p>
+            )}
+
+            {amHost && (
+              <Button className="h-14 text-lg w-full mt-2" onClick={handlePyramidNext}>
+                Odsłoń następną kartę
+              </Button>
+            )}
+
+            {/* Liczniki łyków z bieżącej karty */}
+            {currentCard && Object.keys(py.pendingSipsByPlayer).length > 0 && (
+              <div className="mt-2 flex flex-col gap-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">
+                  Łyki za tę kartę
+                </p>
+                {Object.entries(py.pendingSipsByPlayer).map(([pid, sips]) => {
+                  const player = state.players.find((p) => p.id === pid);
+                  return (
+                    <div key={pid} className="flex justify-between px-2 py-1 bg-muted rounded">
+                      <span>{player?.nick ?? pid}</span>
+                      <span className="font-bold">🍺 {sips}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Etap 3 — Tramwaj */}
+      {state.gamePhase === 'tram' && state.tram && (() => {
+        const tram = state.tram;
+        const isTramPlayer = tram.tramPlayerId === myPlayerId;
+        const tramPlayer = state.players.find((p) => p.id === tram.tramPlayerId);
+        const isFirstCard = tram.lastCard === null;
+
+        return (
+          <div className="flex flex-col gap-4 mt-2">
+            {/* Karta referencyjna */}
+            {tram.lastCard && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">
+                  Ostatnia karta
+                </p>
+                <Card card={tram.lastCard} size="lg" />
+              </div>
+            )}
+
+            {/* Licznik streak */}
+            <div className="flex items-center justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={i}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
+                    i <= tram.streak
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : 'border-muted-foreground text-muted-foreground'
+                  }`}
+                >
+                  {i}
+                </div>
+              ))}
+            </div>
+
+            {isTramPlayer ? (
+              <>
+                {isFirstCard ? (
+                  <Button
+                    className="h-16 text-xl w-full"
+                    onClick={() => handleTramGuess('reference')}
+                  >
+                    Ciągnij kartę referencyjną
+                  </Button>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      className="h-16 text-xl"
+                      onClick={() => handleTramGuess('higher')}
+                    >
+                      ▲ Wyżej
+                    </Button>
+                    <Button
+                      className="h-16 text-xl"
+                      onClick={() => handleTramGuess('lower')}
+                    >
+                      ▼ Niżej
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">
+                <strong>{tramPlayer?.nick ?? '...'}</strong> jedzie tramwajem.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Koniec gry */}
       {state.status === 'ended' && (
         <div className="flex flex-col items-center gap-4 mt-2">
           <h2 className="text-2xl font-bold">Koniec gry!</h2>
+          {state.winnerId && (
+            <p className="text-lg text-center">
+              Tramwajarz:{' '}
+              <strong>{state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}</strong>{' '}
+              dojedzie!
+            </p>
+          )}
           <p className="text-muted-foreground text-center">
             Sprawdźcie kto pije ile łyków powyżej.
           </p>
@@ -307,6 +605,12 @@ export default function RoomPage() {
           </Button>
         </div>
       )}
+
+      {/* Wachlarz kart */}
+      {state.status === 'playing' && myHand.length > 0 && HandFan}
+
+      {/* Dummy — nie usuwaj, żeby myIdx nie był "unused" */}
+      {myIdx === -1 && null}
     </main>
   );
 }

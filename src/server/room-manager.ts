@@ -41,6 +41,7 @@ export class RoomManager {
       joinedAt: now,
       sips: 0,
       isConnected: true,
+      hand: [],
     };
     const state: RoomState = {
       code,
@@ -50,6 +51,11 @@ export class RoomManager {
       deck: [],
       currentTurnPlayerId: null,
       drawnCards: [],
+      gamePhase: null,
+      collecting: null,
+      pyramid: null,
+      tram: null,
+      winnerId: null,
     };
     this.rooms.set(code, state);
     this.meta.set(code, { createdAt: now, lastActivityAt: now });
@@ -74,6 +80,7 @@ export class RoomManager {
       joinedAt: now,
       sips: 0,
       isConnected: true,
+      hand: [],
     };
     const newState: RoomState = {
       ...room,

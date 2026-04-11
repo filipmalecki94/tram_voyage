@@ -29,8 +29,20 @@ export interface ClientToServerEvents {
     payload: Record<string, never>,
     cb: (res: Result<null>) => void,
   ) => void;
-  'game:drawCard': (
+  'game:collectingGuess': (
+    payload: { answer: string },
+    cb: (res: Result<null>) => void,
+  ) => void;
+  'game:pyramidAssign': (
+    payload: { toPlayerId: string },
+    cb: (res: Result<null>) => void,
+  ) => void;
+  'game:pyramidNext': (
     payload: Record<string, never>,
+    cb: (res: Result<null>) => void,
+  ) => void;
+  'game:tramGuess': (
+    payload: { answer: 'higher' | 'lower' | 'reference' },
     cb: (res: Result<null>) => void,
   ) => void;
 }
@@ -38,7 +50,8 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   'room:state': (state: PublicRoomState) => void;
   'game:card_drawn': (data: { card: Card; byPlayerId: string }) => void;
-  'game:ended': (data: { reason: string }) => void;
+  'game:ended': (data: { reason: string; winnerId?: string }) => void;
+  'game:rainbow': (data: { byPlayerId: string }) => void;
   'error': (data: { message: string }) => void;
 }
 
