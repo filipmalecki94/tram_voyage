@@ -47,6 +47,8 @@ export const tramGuessSchema = z.object({
   ]),
 });
 
+export const confirmDrinkSchema = z.object({}).strict();
+
 export function validate<T>(
   schema: z.ZodSchema<T>,
   payload: unknown,

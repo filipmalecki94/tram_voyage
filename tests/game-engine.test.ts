@@ -14,6 +14,7 @@ import {
   pickTramPlayer,
   enterTram,
   tramGuess,
+  confirmDrink,
   type CollectingGuess,
 } from '@/server/game-engine';
 import type { Card, Player, RoomState } from '@/shared/types';
@@ -216,7 +217,12 @@ describe('collectingGuess — Runda 1', () => {
     expect(result.sipsAwarded).toBe(1);
     const p1 = result.state.players.find((p) => p.id === 'p1')!;
     expect(p1.hand).toHaveLength(1);
-    expect(p1.sips).toBe(1);
+    // Sipsy trafiają do gracza dopiero po confirmDrink
+    expect(p1.sips).toBe(0);
+    expect(result.state.drinkGate).not.toBeNull();
+    expect(result.state.drinkGate!.entries[0].playerId).toBe('p1');
+    expect(result.state.drinkGate!.entries[0].sips).toBe(1);
+    expect(result.state.drinkGate!.resumeAction).toBe('collecting-next');
   });
 });
 
@@ -359,11 +365,16 @@ describe('collectingGuess — Runda 4 (symbol + tęcza)', () => {
     const r = collectingGuess(s, 'p1', { kind: 'suit', value: 'diamonds' }, seededRng(1));
     expect(r.correct).toBe(true);
     expect(r.rainbowTriggered).toBe(true);
-    // p1 nie pije, p2 pije 1
+    // p1 nie pije, p2 pije 1 — ale sipsy dopiero po confirmDrink
     const p1 = r.state.players.find((p) => p.id === 'p1')!;
     const p2 = r.state.players.find((p) => p.id === 'p2')!;
     expect(p1.sips).toBe(0);
-    expect(p2.sips).toBe(1);
+    expect(p2.sips).toBe(0);
+    expect(r.state.drinkGate).not.toBeNull();
+    const gateEntryP2 = r.state.drinkGate!.entries.find((e) => e.playerId === 'p2');
+    expect(gateEntryP2).toBeDefined();
+    expect(gateEntryP2!.sips).toBe(1);
+    expect(r.state.drinkGate!.resumeAction).toBe('collecting-next');
   });
 
   it('tęcza — wybór tęczowego symbolu ale pudło → tylko gracz pije', () => {
@@ -379,8 +390,12 @@ describe('collectingGuess — Runda 4 (symbol + tęcza)', () => {
     expect(r.rainbowTriggered).toBe(false);
     const p1 = r.state.players.find((p) => p.id === 'p1')!;
     const p2 = r.state.players.find((p) => p.id === 'p2')!;
-    expect(p1.sips).toBe(1);
+    // Sipsy trafiają po confirmDrink
+    expect(p1.sips).toBe(0);
     expect(p2.sips).toBe(0);
+    expect(r.state.drinkGate).not.toBeNull();
+    expect(r.state.drinkGate!.entries[0].playerId).toBe('p1');
+    expect(r.state.drinkGate!.entries[0].sips).toBe(1);
   });
 });
 
@@ -496,8 +511,13 @@ describe('pyramidAssignSips', () => {
     const state = pyramidStateWithCurrentCard();
     const result = pyramidAssignSips(state, 'p1', 'p2');
     expect(result.sipsAwarded).toBe(1);
+    // Sipsy trafiają do gracza dopiero po confirmDrink
     const p2 = result.state.players.find((p) => p.id === 'p2')!;
-    expect(p2.sips).toBe(1);
+    expect(p2.sips).toBe(0);
+    expect(result.state.drinkGate).not.toBeNull();
+    expect(result.state.drinkGate!.entries[0].playerId).toBe('p2');
+    expect(result.state.drinkGate!.entries[0].sips).toBe(1);
+    expect(result.state.drinkGate!.resumeAction).toBe('pyramid-next');
   });
 
   it('usuwa kartę z ręki gracza przypisującego', () => {
@@ -523,20 +543,12 @@ describe('pyramidAssignSips', () => {
 // pyramidNext
 // ----------------------------------------------------------------
 describe('pyramidNext', () => {
-  it('odsłania kartę i zeruje pendingSipsByPlayer', () => {
+  it('odsłania kartę i ustawia currentCard', () => {
     const base = createGame(makePlayers(2), seededRng(1));
     const collecting = startCollecting(base, seededRng(1));
     const py = enterPyramid(collecting);
-    const stateWithSips = {
-      ...py,
-      pyramid: {
-        ...py.pyramid!,
-        pendingSipsByPlayer: { p1: 3 },
-      },
-    };
-    const result = pyramidNext(stateWithSips, seededRng(1));
+    const result = pyramidNext(py, seededRng(1));
     expect(result.card).toBeDefined();
-    expect(result.state.pyramid!.pendingSipsByPlayer).toEqual({});
     expect(result.state.pyramid!.currentCard).toEqual(result.card);
   });
 
@@ -641,10 +653,13 @@ describe('tramGuess', () => {
     };
     const r1 = tramGuess(state, 'p1', 'lower', seededRng(1));
     expect(r1.correct).toBe(false);
-    expect(r1.state.tram!.streak).toBe(0);
-    expect(r1.state.tram!.lastCard).toBeNull(); // nowa talia
+    // Tram nie jest od razu resetowany — czekamy na confirmDrink
+    expect(r1.state.drinkGate).not.toBeNull();
+    expect(r1.state.drinkGate!.resumeAction).toBe('tram-restart');
+    expect(r1.state.drinkGate!.context!.tramPlayerId).toBe('p1');
+    // Sipsy trafiają do gracza dopiero po confirmDrink
     const p1 = r1.state.players.find((p) => p.id === 'p1')!;
-    expect(p1.sips).toBe(1);
+    expect(p1.sips).toBe(0);
   });
 
   it('5-streak sukces → gamePhase=ended, winnerId ustawiony', () => {
@@ -750,8 +765,10 @@ describe('tramGuess', () => {
     // pudło — karta niżej przy guess 'higher'
     const r3 = tramGuess(state, 'p1', 'higher', seededRng(1));
     expect(r3.correct).toBe(false);
-    expect(r3.state.tram!.streakCards).toHaveLength(0);
-    expect(r3.state.tram!.streak).toBe(0);
+    // streakCards zachowane w drinkGate.context (nie zresetowane od razu)
+    expect(r3.state.drinkGate).not.toBeNull();
+    expect(r3.state.drinkGate!.context!.streakCards).toHaveLength(2);
+    expect(r3.state.drinkGate!.resumeAction).toBe('tram-restart');
   });
 
   it('streakCards ma 5 elementów po wygranej', () => {
@@ -778,5 +795,122 @@ describe('tramGuess', () => {
 
     expect(state.gamePhase).toBe('ended');
     expect(state.tram!.streakCards).toHaveLength(5);
+  });
+});
+
+// ----------------------------------------------------------------
+// confirmDrink
+// ----------------------------------------------------------------
+describe('confirmDrink', () => {
+  it('collecting — gracz pije po potwierdzeniu, tura przesuwa się dalej', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    const col = collecting.collecting!;
+    const p1 = collecting.players[col.currentPlayerIdx];
+
+    // Wymuś pudło: zgadnij kolor a karta będzie przeciwna
+    const topCard = collecting.deck[0];
+    const wrongColor = topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'black' : 'red';
+    const r = collectingGuess(collecting, p1.id, { kind: 'color', value: wrongColor }, seededRng(1));
+
+    expect(r.state.drinkGate).not.toBeNull();
+    expect(r.state.drinkGate!.entries[0].playerId).toBe(p1.id);
+
+    // Po confirmDrink: sipsy zapisane, tura ruszyła
+    const after = confirmDrink(r.state, p1.id, seededRng(1));
+    expect(after.drinkGate).toBeNull();
+    const p1After = after.players.find((p) => p.id === p1.id)!;
+    expect(p1After.sips).toBe(1);
+    // Tura ruszyła do następnego gracza
+    const p2Id = collecting.players[(col.currentPlayerIdx + 1) % 2].id;
+    expect(after.players[after.collecting!.currentPlayerIdx].id).toBe(p2Id);
+  });
+
+  it('confirmDrink jest idempotentne — drugi call to no-op', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    const p1 = collecting.players[collecting.collecting!.currentPlayerIdx];
+    const topCard = collecting.deck[0];
+    const wrongColor = topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'black' : 'red';
+    const r = collectingGuess(collecting, p1.id, { kind: 'color', value: wrongColor }, seededRng(1));
+
+    const after1 = confirmDrink(r.state, p1.id, seededRng(1));
+    const after2 = confirmDrink(after1, p1.id, seededRng(1)); // drugi call
+    // Stan nie zmienia się po drugim potwierdzeniu
+    expect(after2).toEqual(after1);
+  });
+
+  it('confirmDrink — nie-gracz z gate to no-op', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    const p1 = collecting.players[collecting.collecting!.currentPlayerIdx];
+    const topCard = collecting.deck[0];
+    const wrongColor = topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'black' : 'red';
+    const r = collectingGuess(collecting, p1.id, { kind: 'color', value: wrongColor }, seededRng(1));
+
+    // p2 próbuje potwierdzić picie p1 — nie powinno zmienić stanu
+    const p2Id = collecting.players.find((p) => p.id !== p1.id)!.id;
+    const after = confirmDrink(r.state, p2Id, seededRng(1));
+    expect(after.drinkGate).not.toBeNull(); // gate nadal aktywny
+    expect(after.drinkGate!.entries[0].confirmed).toBe(false);
+  });
+
+  it('pyramid — confirmDrink zwalnia blokadę pyramidNext', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const collecting = startCollecting(base, seededRng(1));
+    const py = enterPyramid(collecting);
+
+    // Odsłoń kartę
+    const r0 = pyramidNext(py, seededRng(1));
+    const currentCard = r0.state.pyramid!.currentCard!;
+
+    // Daj p1 kartę pasującą do currentCard
+    const stateWithCard: RoomState = {
+      ...r0.state,
+      players: r0.state.players.map((p, i) =>
+        i === 0 ? { ...p, hand: [currentCard] } : p,
+      ),
+    };
+    const p1 = stateWithCard.players[0];
+    const p2 = stateWithCard.players[1];
+
+    const assignResult = pyramidAssignSips(stateWithCard, p1.id, p2.id);
+    expect(assignResult.state.drinkGate).not.toBeNull();
+
+    // pyramidNext zablokowane
+    expect(() => pyramidNext(assignResult.state, seededRng(1))).toThrow('Czekamy na potwierdzenie picia');
+
+    // Po confirmDrink pyramidNext działa
+    const afterConfirm = confirmDrink(assignResult.state, p2.id, seededRng(1));
+    expect(afterConfirm.drinkGate).toBeNull();
+    expect(afterConfirm.players.find((p) => p.id === p2.id)!.sips).toBe(1);
+    expect(() => pyramidNext(afterConfirm, seededRng(1))).not.toThrow();
+  });
+
+  it('tram — confirmDrink resetuje talię (enterTram)', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const s = enterTram(base, base.players[0].id, seededRng(1));
+
+    const r0 = tramGuess(s, s.players[0].id, 'reference', seededRng(1));
+    // Wymuś pudło
+    const refCard: Card = { rank: 2, suit: 'spades' };
+    const wrongCard: Card = { rank: 'A', suit: 'hearts' }; // wyżej, ale guess lower
+    const withWrongDeck: RoomState = {
+      ...r0.state,
+      tram: { ...r0.state.tram!, lastCard: refCard, deck: [wrongCard, ...r0.state.tram!.deck.slice(1)], streak: 2, streakCards: [{ rank: 3, suit: 'clubs' }, { rank: 5, suit: 'hearts' }] },
+    };
+
+    const r1 = tramGuess(withWrongDeck, withWrongDeck.tram!.tramPlayerId, 'lower', seededRng(1));
+    expect(r1.correct).toBe(false);
+    expect(r1.state.drinkGate).not.toBeNull();
+    expect(r1.state.drinkGate!.context!.streakCards).toHaveLength(2);
+
+    const afterConfirm = confirmDrink(r1.state, r1.state.tram!.tramPlayerId, seededRng(1));
+    // enterTram wywołane: reset streak, nowa talia
+    expect(afterConfirm.drinkGate).toBeNull();
+    expect(afterConfirm.tram!.streak).toBe(0);
+    expect(afterConfirm.tram!.streakCards).toHaveLength(0);
+    expect(afterConfirm.tram!.lastCard).toBeNull();
+    expect(afterConfirm.players.find((p) => p.id === r1.state.tram!.tramPlayerId)!.sips).toBe(1);
   });
 });

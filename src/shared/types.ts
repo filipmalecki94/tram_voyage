@@ -8,6 +8,25 @@ export interface Card {
 
 export type GamePhase = 'collecting' | 'pyramid' | 'tram' | 'ended';
 
+export type DrinkReason = 'collecting-miss' | 'collecting-rainbow' | 'pyramid-assign' | 'tram-lost';
+export type DrinkResume = 'collecting-next' | 'pyramid-next' | 'tram-restart';
+
+export interface DrinkGateEntry {
+  playerId: string;
+  sips: number;
+  reason: DrinkReason;
+  confirmed: boolean;
+}
+
+export interface DrinkGate {
+  entries: DrinkGateEntry[];
+  resumeAction: DrinkResume;
+  context?: {
+    streakCards?: Card[];
+    tramPlayerId?: string;
+  };
+}
+
 export interface CollectingSubState {
   round: 1 | 2 | 3 | 4;
   currentPlayerIdx: number;
@@ -19,7 +38,6 @@ export interface PyramidSubState {
   revealedLevels: number;
   revealedInLevel: number;
   currentCard: Card | null;
-  pendingSipsByPlayer: Record<string, number>;
 }
 
 export interface PublicPyramidSubState {
@@ -28,7 +46,6 @@ export interface PublicPyramidSubState {
   revealedLevels: number;
   revealedInLevel: number;
   currentCard: Card | null;
-  pendingSipsByPlayer: Record<string, number>;
 }
 
 export interface TramSubState {
@@ -69,6 +86,7 @@ export interface RoomState {
   pyramid: PyramidSubState | null;
   tram: TramSubState | null;
   winnerId: string | null;
+  drinkGate: DrinkGate | null;
 }
 
 export type PublicPlayer = Omit<Player, 'joinedAt'>;
@@ -87,6 +105,7 @@ export interface PublicRoomState {
   tram: PublicTramSubState | null;
   winnerId: string | null;
   handsByPlayerId: Record<string, Card[]>;
+  drinkGate: DrinkGate | null;
 }
 
 export function toPublicRoomState(s: RoomState): PublicRoomState {
@@ -113,7 +132,6 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
       revealedLevels: py.revealedLevels,
       revealedInLevel: py.revealedInLevel,
       currentCard: py.currentCard,
-      pendingSipsByPlayer: py.pendingSipsByPlayer,
     };
   }
 
@@ -148,5 +166,6 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
     tram: publicTram,
     winnerId: s.winnerId,
     handsByPlayerId,
+    drinkGate: s.drinkGate,
   };
 }

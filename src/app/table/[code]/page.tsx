@@ -100,21 +100,31 @@ export default function TablePage() {
                 return (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 transition-all duration-300 ${
+                    className={`flex flex-col gap-1 rounded-xl px-3 py-2 transition-all duration-300 ${
                       isActive
                         ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10'
                         : 'bg-neutral-800 text-white'
                     } ${!player.isConnected ? 'opacity-40' : ''}`}
                   >
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isActive ? 'bg-neutral-900' : colorClass}`}
-                    >
-                      {initial}
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isActive ? 'bg-neutral-900' : colorClass}`}
+                      >
+                        {initial}
+                      </div>
+                      <span className="font-medium text-sm">{player.nick}</span>
+                      {isTramPlayer && <span className="text-xs ml-1">🚋</span>}
+                      {(state.status === 'ended' || state.gamePhase !== null) && (
+                        <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
+                      )}
                     </div>
-                    <span className="font-medium text-sm">{player.nick}</span>
-                    {isTramPlayer && <span className="text-xs ml-1">🚋</span>}
-                    {(state.status === 'ended' || state.gamePhase !== null) && (
-                      <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
+                    {/* Zebrane karty w Etapie 1 */}
+                    {state.gamePhase === 'collecting' && state.handsByPlayerId[player.id]?.length > 0 && (
+                      <div className="flex gap-1 flex-wrap mt-1">
+                        {state.handsByPlayerId[player.id].map((c, i) => (
+                          <Card key={i} card={c} size="sm" />
+                        ))}
+                      </div>
                     )}
                   </div>
                 );
@@ -123,8 +133,54 @@ export default function TablePage() {
           </div>
         )}
 
+        {/* DrinkGate banner — widoczny we wszystkich fazach gdy ktoś musi potwierdzić picie */}
+        {state?.drinkGate && (
+          <div className="rounded-xl border border-amber-500 bg-amber-500/10 px-4 py-3 flex flex-col gap-2">
+            <p className="text-sm font-semibold text-amber-400 uppercase tracking-widest">
+              Przystanek — picie
+            </p>
+            <div className="flex flex-col gap-1">
+              {state.drinkGate.entries.map((entry) => {
+                const player = state.players.find((p) => p.id === entry.playerId);
+                return (
+                  <div key={entry.playerId} className="flex items-center justify-between text-sm">
+                    <span className={entry.confirmed ? 'line-through text-neutral-500' : 'text-white'}>
+                      {player?.nick ?? entry.playerId} — pije 🍺 {entry.sips}
+                    </span>
+                    <span className={entry.confirmed ? 'text-emerald-400' : 'text-amber-400'}>
+                      {entry.confirmed ? '✓ Wypiłem' : '⏳ czeka'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-neutral-400">
+              {state.drinkGate.entries.filter((e) => e.confirmed).length}/{state.drinkGate.entries.length} potwierdziło
+            </p>
+          </div>
+        )}
+
+        {/* Etap 3 — ekran przegranej tramwajarza */}
+        {state?.drinkGate?.resumeAction === 'tram-restart' && state.drinkGate.context && (
+          <div className="rounded-xl border border-red-500 bg-red-500/10 px-4 py-4 flex flex-col gap-3">
+            <p className="text-xl font-bold text-red-400">
+              {state.players.find((p) => p.id === state.drinkGate!.context!.tramPlayerId)?.nick ?? '?'} przegrał — zaczyna od nowa
+            </p>
+            {state.drinkGate.context.streakCards && state.drinkGate.context.streakCards.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs text-neutral-400 uppercase tracking-widest">Karty z tego podejścia:</p>
+                <div className="flex gap-2 flex-wrap">
+                  {state.drinkGate.context.streakCards.map((c, i) => (
+                    <Card key={i} card={c} size="md" />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Etap 1 — aktywna tura */}
-        {state?.gamePhase === 'collecting' && state.collecting && (() => {
+        {state?.gamePhase === 'collecting' && state.collecting && !state.drinkGate && (() => {
           const currentPlayer = state.players[state.collecting.currentPlayerIdx];
           return (
             <p className="text-2xl font-semibold">
@@ -140,59 +196,54 @@ export default function TablePage() {
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest mb-4">
               Piramida
             </p>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col items-center gap-3">
               {state.pyramid.layout.map((levelCards, lvlIdx) => {
                 const level = lvlIdx + 1;
                 return (
-                  <div key={lvlIdx} className="flex flex-col gap-1">
-                    <p className="text-xs text-neutral-500">
-                      Poziom {level} ({level} {level === 1 ? 'kolejka' : level < 5 ? 'kolejki' : 'kolejek'})
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      {levelCards.map((card, cardIdx) => {
-                        const isRevealed = card !== null;
-                        const isCurrent =
-                          isRevealed &&
-                          state.pyramid!.currentCard !== null &&
-                          card.rank === state.pyramid!.currentCard.rank &&
-                          card.suit === state.pyramid!.currentCard.suit;
-                        return (
-                          <div
-                            key={cardIdx}
-                            className={`rounded-lg border-2 ${
-                              isCurrent
-                                ? 'border-yellow-400 shadow-lg shadow-yellow-400/30'
-                                : 'border-neutral-700'
-                            }`}
-                          >
-                            {isRevealed ? (
-                              <Card card={card} size="sm" />
-                            ) : (
-                              <div className="w-10 h-14 bg-neutral-700 rounded-md flex items-center justify-center text-neutral-500 text-xs">
-                                ?
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div key={lvlIdx} className="flex gap-2 justify-center" aria-label={`Poziom ${level} — ${level} kolejki`}>
+                    {levelCards.map((card, cardIdx) => {
+                      const isRevealed = card !== null;
+                      const isCurrent =
+                        isRevealed &&
+                        state.pyramid!.currentCard !== null &&
+                        card.rank === state.pyramid!.currentCard.rank &&
+                        card.suit === state.pyramid!.currentCard.suit;
+                      return (
+                        <div
+                          key={cardIdx}
+                          className={`rounded-lg border-2 ${
+                            isCurrent
+                              ? 'border-yellow-400 shadow-lg shadow-yellow-400/30'
+                              : 'border-neutral-700'
+                          }`}
+                        >
+                          {isRevealed ? (
+                            <Card card={card} size="sm" />
+                          ) : (
+                            <div className="w-16 h-24 bg-neutral-700 rounded-md flex items-center justify-center text-neutral-500 text-xs">
+                              ?
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
             </div>
 
-            {/* Łyki za bieżącą kartę */}
-            {state.pyramid.currentCard && Object.keys(state.pyramid.pendingSipsByPlayer).length > 0 && (
+            {/* Łyki za bieżącą kartę — z drinkGate */}
+            {state.pyramid.currentCard && state.drinkGate && state.drinkGate.entries.length > 0 && (
               <div className="mt-4 flex flex-col gap-1">
                 <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">
                   Łyki za tę kartę
                 </p>
-                {Object.entries(state.pyramid.pendingSipsByPlayer).map(([pid, sips]) => {
-                  const player = state.players.find((p) => p.id === pid);
+                {state.drinkGate.entries.map((entry) => {
+                  const player = state.players.find((p) => p.id === entry.playerId);
                   return (
-                    <div key={pid} className="flex justify-between text-sm bg-neutral-800 px-3 py-1 rounded">
-                      <span>{player?.nick ?? pid}</span>
-                      <span className="font-bold">🍺 {sips}</span>
+                    <div key={entry.playerId} className="flex justify-between text-sm bg-neutral-800 px-3 py-1 rounded">
+                      <span>{player?.nick ?? entry.playerId}</span>
+                      <span className="font-bold">🍺 {entry.sips} {entry.confirmed ? '✓' : '…'}</span>
                     </div>
                   );
                 })}

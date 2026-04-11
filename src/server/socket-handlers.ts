@@ -5,6 +5,7 @@ import {
   pyramidNext,
   pyramidAssignSips,
   tramGuess,
+  confirmDrink,
   type CollectingGuess,
 } from '@/server/game-engine';
 import { toPublicRoomState } from '@/shared/types';
@@ -17,6 +18,7 @@ import {
   pyramidAssignSchema,
   pyramidNextSchema,
   tramGuessSchema,
+  confirmDrinkSchema,
   validate,
 } from '@/server/schemas';
 import type { AppServer, AppSocket } from '@/shared/socket-events';
@@ -221,6 +223,31 @@ export function registerSocketHandlers(
           io.to(roomCode).emit('game:ended', {
             reason: 'tram_complete',
             winnerId: result.state.winnerId ?? undefined,
+          });
+        }
+        cb({ ok: true, data: null });
+      } catch (e) {
+        cb({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    socket.on('game:confirmDrink', (payload, cb) => {
+      const data = validate(confirmDrinkSchema, payload, cb);
+      if (data === null) return;
+      const { playerId, roomCode } = socket.data;
+      if (!playerId || !roomCode) return cb({ ok: false, error: 'not_in_room' });
+      const room = rooms.getRoom(roomCode);
+      if (!room) return cb({ ok: false, error: 'no_room' });
+      if (!room.drinkGate) return cb({ ok: false, error: 'no_drink_gate' });
+
+      try {
+        const newState = confirmDrink(room, playerId, Math.random);
+        rooms.updateRoom(roomCode, newState);
+        io.to(roomCode).emit('room:state', toPublicRoomState(newState));
+        if (newState.gamePhase === 'ended' || newState.status === 'ended') {
+          io.to(roomCode).emit('game:ended', {
+            reason: 'game_complete',
+            winnerId: newState.winnerId ?? undefined,
           });
         }
         cb({ ok: true, data: null });

@@ -45,6 +45,10 @@ export interface ClientToServerEvents {
     payload: { answer: 'higher' | 'lower' | 'reference' },
     cb: (res: Result<null>) => void,
   ) => void;
+  'game:confirmDrink': (
+    payload: Record<string, never>,
+    cb: (res: Result<null>) => void,
+  ) => void;
 }
 
 export interface ServerToClientEvents {

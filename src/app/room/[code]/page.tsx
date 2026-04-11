@@ -173,6 +173,11 @@ export default function RoomPage() {
     if (!res.ok) toast.error(res.error);
   }, [emit]);
 
+  const handleConfirmDrink = useCallback(async () => {
+    const res = await emit('game:confirmDrink', {});
+    if (!res.ok) toast.error(res.error);
+  }, [emit]);
+
   // --- Rendering ---
 
   if (reconnecting) {
@@ -300,6 +305,45 @@ export default function RoomPage() {
         })}
       </div>
 
+      {/* DrinkGate — przystanek na picie */}
+      {state.drinkGate && (() => {
+        const gate = state.drinkGate!;
+        const myEntry = gate.entries.find((e) => e.playerId === myPlayerId);
+        const isTramRestart = gate.resumeAction === 'tram-restart';
+        const confirmedCount = gate.entries.filter((e) => e.confirmed).length;
+
+        return (
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-500 bg-amber-500/10 p-4">
+            {isTramRestart && gate.context?.streakCards && gate.context.streakCards.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-semibold text-amber-400">Karty z tego podejścia:</p>
+                <div className="flex gap-1 flex-wrap">
+                  {gate.context.streakCards.map((c, i) => (
+                    <Card key={i} card={c} size="sm" />
+                  ))}
+                </div>
+              </div>
+            )}
+            {myEntry && !myEntry.confirmed ? (
+              <Button
+                className="h-16 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleConfirmDrink}
+              >
+                {isTramRestart ? 'Jadę dalej' : `Wypiłem 🍺 ${myEntry.sips}`}
+              </Button>
+            ) : myEntry?.confirmed ? (
+              <p className="text-center text-emerald-400 font-medium py-2">
+                ✓ Potwierdzone — czekamy na innych ({confirmedCount}/{gate.entries.length})
+              </p>
+            ) : (
+              <p className="text-center text-amber-400 text-sm py-2">
+                {gate.entries.filter((e) => !e.confirmed).map((e) => state.players.find((p) => p.id === e.playerId)?.nick ?? e.playerId).join(', ')} {gate.entries.length === 1 ? 'pije' : 'piją'}…
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Oczekiwanie na start */}
       {state.status === 'waiting' && (
         <div className="flex flex-col gap-3 mt-2">
@@ -351,18 +395,18 @@ export default function RoomPage() {
                       const isBlack = v === 'black';
                       const selected = selectedAnswer === v;
                       return (
-                        <Button
+                        <button
                           key={v}
-                          variant="outline"
-                          className={`h-16 text-lg border-2 ${
+                          disabled={!!state.drinkGate}
+                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors ${
                             isBlack
-                              ? `border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : ''}`
-                              : `border-red-600 text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : ''}`
+                              ? `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
+                              : `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
                           }`}
                           onClick={() => setSelectedAnswer(v)}
                         >
                           {isBlack ? 'Czarna' : 'Czerwona'}
-                        </Button>
+                        </button>
                       );
                     })}
                   </div>
@@ -417,29 +461,29 @@ export default function RoomPage() {
                       const selected = selectedAnswer === suit;
                       if (isRainbow) {
                         return (
-                          <Button
+                          <button
                             key={suit}
-                            variant="outline"
-                            className={`h-16 text-lg border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                            disabled={!!state.drinkGate}
+                            className={`h-16 text-lg rounded-md border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white font-medium transition-opacity ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
                             onClick={() => setSelectedAnswer(suit)}
                           >
                             {SUIT_LABELS[suit]}
-                          </Button>
+                          </button>
                         );
                       }
                       return (
-                        <Button
+                        <button
                           key={suit}
-                          variant="outline"
-                          className={`h-16 text-lg border-2 ${
+                          disabled={!!state.drinkGate}
+                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors ${
                             isRed
-                              ? `border-red-600 text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : ''}`
-                              : `border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : ''}`
+                              ? `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
+                              : `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
                           }`}
                           onClick={() => setSelectedAnswer(suit)}
                         >
                           {SUIT_LABELS[suit]}
-                        </Button>
+                        </button>
                       );
                     })}
                   </div>
@@ -478,7 +522,7 @@ export default function RoomPage() {
                   <Card card={currentCard} size="lg" />
                 </div>
 
-                {canAssign && (
+                {canAssign && !state.drinkGate && (
                   <div className="flex flex-col gap-2">
                     <p className="text-sm font-medium text-center">
                       Masz kartę o tej randze! Każ komuś pić:
@@ -511,23 +555,27 @@ export default function RoomPage() {
             )}
 
             {amHost && (
-              <Button className="h-14 text-lg w-full mt-2" onClick={handlePyramidNext}>
+              <Button
+                className="h-14 text-lg w-full mt-2"
+                disabled={!!state.drinkGate}
+                onClick={handlePyramidNext}
+              >
                 Odsłoń następną kartę
               </Button>
             )}
 
-            {/* Liczniki łyków z bieżącej karty */}
-            {currentCard && Object.keys(py.pendingSipsByPlayer).length > 0 && (
+            {/* Liczniki łyków z bieżącej karty — z drinkGate */}
+            {currentCard && state.drinkGate && state.drinkGate.entries.length > 0 && (
               <div className="mt-2 flex flex-col gap-1">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">
                   Łyki za tę kartę
                 </p>
-                {Object.entries(py.pendingSipsByPlayer).map(([pid, sips]) => {
-                  const player = state.players.find((p) => p.id === pid);
+                {state.drinkGate.entries.map((entry) => {
+                  const player = state.players.find((p) => p.id === entry.playerId);
                   return (
-                    <div key={pid} className="flex justify-between px-2 py-1 bg-muted rounded">
-                      <span>{player?.nick ?? pid}</span>
-                      <span className="font-bold">🍺 {sips}</span>
+                    <div key={entry.playerId} className="flex justify-between px-2 py-1 bg-muted rounded">
+                      <span>{player?.nick ?? entry.playerId}</span>
+                      <span className="font-bold">🍺 {entry.sips} {entry.confirmed ? '✓' : '…'}</span>
                     </div>
                   );
                 })}
@@ -591,7 +639,7 @@ export default function RoomPage() {
                   Opuść pokój
                 </Button>
               </div>
-            ) : isTramPlayer ? (
+            ) : isTramPlayer && !state.drinkGate ? (
               <>
                 {isFirstCard ? (
                   <Button

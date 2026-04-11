@@ -6,6 +6,7 @@ import type {
   Rank,
   PyramidSubState,
   TramSubState,
+  DrinkGate,
 } from '@/shared/types';
 
 export type GameState = RoomState;
@@ -68,6 +69,7 @@ export function createGame(players: Player[], rng: RNG): GameState {
     pyramid: null,
     tram: null,
     winnerId: null,
+    drinkGate: null,
   };
 }
 
@@ -86,6 +88,7 @@ export function startCollecting(state: GameState, rng: RNG): GameState {
     tram: null,
     winnerId: null,
     currentTurnPlayerId: state.players[0]?.id ?? null,
+    drinkGate: null,
   };
 }
 
@@ -165,9 +168,44 @@ export interface CollectingGuessResult {
 }
 
 /**
+ * Przesuwa turę zbierania po potwierdzeniu picia (lub bezpośrednio gdy nikt nie pił).
+ * Wywoływane przez collectingGuess (gdy nikt nie pije) oraz confirmDrink (resumeAction = 'collecting-next').
+ */
+export function advanceCollecting(state: GameState): GameState {
+  if (!state.collecting) return state;
+  const col = state.collecting;
+  const nextPlayerIdx = (col.currentPlayerIdx + 1) % state.players.length;
+  const allPlayed = nextPlayerIdx === 0;
+  const isLastRound = col.round === 4;
+
+  if (allPlayed && isLastRound) {
+    return enterPyramid(state);
+  } else if (allPlayed) {
+    return {
+      ...state,
+      collecting: {
+        round: (col.round + 1) as 1 | 2 | 3 | 4,
+        currentPlayerIdx: 0,
+      },
+      currentTurnPlayerId: state.players[0].id,
+    };
+  } else {
+    return {
+      ...state,
+      collecting: {
+        ...col,
+        currentPlayerIdx: nextPlayerIdx,
+      },
+      currentTurnPlayerId: state.players[nextPlayerIdx].id,
+    };
+  }
+}
+
+/**
  * Gracz składa zgadywanie w Etapie 1 (Zbieranie).
  * Zdejmuje kartę z talii, ocenia trafienie, aktualizuje stan.
- * Po rundzie 4 ostatniego gracza automatycznie przechodzi do enterPyramid.
+ * Gdy gracz(e) muszą pić — ustawia drinkGate zamiast natychmiast zmieniać sips.
+ * Postęp gry jest wstrzymany do czasu potwierdzenia picia przez wszystkich (confirmDrink).
  */
 export function collectingGuess(
   state: GameState,
@@ -199,36 +237,10 @@ export function collectingGuess(
   const correct = resolveCollectingGuess(guess, card, hand);
   const rainbowTriggered = choseRainbow && correct;
 
-  // Oblicz łyki
-  let sipsAwarded = 0;
-  let updatedPlayers: Player[];
-
-  if (rainbowTriggered) {
-    // Wszyscy inni piją 1
-    updatedPlayers = state.players.map((p) => {
-      if (p.id === playerId) return { ...p, hand: [...p.hand, card] };
-      return { ...p, sips: p.sips + 1 };
-    });
-    sipsAwarded = state.players.length - 1;
-  } else if (!correct) {
-    // Gracz pije 1
-    updatedPlayers = state.players.map((p) =>
-      p.id === playerId
-        ? { ...p, hand: [...p.hand, card], sips: p.sips + 1 }
-        : p,
-    );
-    sipsAwarded = 1;
-  } else {
-    // Trafienie bez tęczy — nikt nie pije
-    updatedPlayers = state.players.map((p) =>
-      p.id === playerId ? { ...p, hand: [...p.hand, card] } : p,
-    );
-  }
-
-  // Przesuń turę
-  const nextPlayerIdx = (col.currentPlayerIdx + 1) % state.players.length;
-  const allPlayed = nextPlayerIdx === 0;
-  const isLastRound = col.round === 4;
+  // Karta zawsze trafia do ręki gracza
+  const updatedPlayers: Player[] = state.players.map((p) =>
+    p.id === playerId ? { ...p, hand: [...p.hand, card] } : p,
+  );
 
   let newState: GameState = {
     ...state,
@@ -237,31 +249,35 @@ export function collectingGuess(
     players: updatedPlayers,
   };
 
-  if (allPlayed && isLastRound) {
-    // Etap 1 zakończony → przejdź do piramidy
-    newState = enterPyramid(newState);
-  } else if (allPlayed) {
-    // Kolejna runda
-    newState = {
-      ...newState,
-      collecting: {
-        round: (col.round + 1) as 1 | 2 | 3 | 4,
-        currentPlayerIdx: 0,
-      },
-      currentTurnPlayerId: newState.players[0].id,
+  if (rainbowTriggered) {
+    // Wszyscy inni muszą pić 1 — ustawiamy drinkGate, wstrzymujemy postęp
+    const sipsAwarded = state.players.length - 1;
+    const otherPlayers = state.players.filter((p) => p.id !== playerId);
+    const gate: DrinkGate = {
+      entries: otherPlayers.map((p) => ({
+        playerId: p.id,
+        sips: 1,
+        reason: 'collecting-rainbow',
+        confirmed: false,
+      })),
+      resumeAction: 'collecting-next',
     };
+    newState = { ...newState, drinkGate: gate };
+    return { state: newState, card, correct, sipsAwarded, rainbowTriggered: true };
+  } else if (!correct) {
+    // Gracz musi pić 1 — ustawiamy drinkGate, wstrzymujemy postęp
+    const gate: DrinkGate = {
+      entries: [{ playerId, sips: 1, reason: 'collecting-miss', confirmed: false }],
+      resumeAction: 'collecting-next',
+    };
+    newState = { ...newState, drinkGate: gate };
+    return { state: newState, card, correct, sipsAwarded: 1, rainbowTriggered: false };
   } else {
-    newState = {
-      ...newState,
-      collecting: {
-        ...col,
-        currentPlayerIdx: nextPlayerIdx,
-      },
-      currentTurnPlayerId: newState.players[nextPlayerIdx].id,
-    };
+    // Trafienie bez picia — od razu przesuwamy turę
+    newState = { ...newState, drinkGate: null };
+    newState = advanceCollecting(newState);
+    return { state: newState, card, correct, sipsAwarded: 0, rainbowTriggered: false };
   }
-
-  return { state: newState, card, correct, sipsAwarded, rainbowTriggered };
 }
 
 // ----------------------------------------------------------------
@@ -288,7 +304,6 @@ export function enterPyramid(state: GameState): GameState {
     revealedLevels: 0,
     revealedInLevel: 0,
     currentCard: null,
-    pendingSipsByPlayer: {},
   };
 
   return {
@@ -298,6 +313,7 @@ export function enterPyramid(state: GameState): GameState {
     collecting: null,
     pyramid,
     currentTurnPlayerId: state.hostId,
+    drinkGate: null,
   };
 }
 
@@ -314,6 +330,9 @@ export interface PyramidNextResult {
 export function pyramidNext(state: GameState, rng: RNG): PyramidNextResult {
   if (state.gamePhase !== 'pyramid' || !state.pyramid) {
     throw new Error('Nie w fazie piramidy');
+  }
+  if (state.drinkGate) {
+    throw new Error('Czekamy na potwierdzenie picia');
   }
   const py = state.pyramid;
 
@@ -339,7 +358,6 @@ export function pyramidNext(state: GameState, rng: RNG): PyramidNextResult {
     revealedLevels: newRevealedLevels,
     revealedInLevel: nextRevealedInLevel,
     currentCard: card,
-    pendingSipsByPlayer: {},
   };
 
   let newState: GameState = {
@@ -407,24 +425,44 @@ export function pyramidAssignSips(
     ...fromPlayer.hand.slice(matchIdx + 1),
   ];
 
-  const newPendingSips = {
-    ...state.pyramid.pendingSipsByPlayer,
-    [toPlayerId]: (state.pyramid.pendingSipsByPlayer[toPlayerId] ?? 0) + level,
-  };
-
   const updatedPlayers = state.players.map((p) => {
     if (p.id === fromPlayerId) return { ...p, hand: newHand };
-    if (p.id === toPlayerId) return { ...p, sips: p.sips + level };
     return p;
   });
+
+  // Aktualizuj drinkGate — sipsy zostaną doliczone dopiero po potwierdzeniu picia
+  let newGate: DrinkGate;
+  if (!state.drinkGate) {
+    newGate = {
+      entries: [{ playerId: toPlayerId, sips: level, reason: 'pyramid-assign', confirmed: false }],
+      resumeAction: 'pyramid-next',
+    };
+  } else {
+    const existingEntryIdx = state.drinkGate.entries.findIndex((e) => e.playerId === toPlayerId);
+    if (existingEntryIdx !== -1) {
+      // Dolicz sipsy i zresetuj potwierdzenie — gracz musi wypić więcej
+      const existingEntry = state.drinkGate.entries[existingEntryIdx];
+      const updatedEntries = state.drinkGate.entries.map((e, i) =>
+        i === existingEntryIdx
+          ? { ...e, sips: existingEntry.sips + level, confirmed: false }
+          : e,
+      );
+      newGate = { ...state.drinkGate, entries: updatedEntries };
+    } else {
+      newGate = {
+        ...state.drinkGate,
+        entries: [
+          ...state.drinkGate.entries,
+          { playerId: toPlayerId, sips: level, reason: 'pyramid-assign', confirmed: false },
+        ],
+      };
+    }
+  }
 
   const newState: GameState = {
     ...state,
     players: updatedPlayers,
-    pyramid: {
-      ...state.pyramid,
-      pendingSipsByPlayer: newPendingSips,
-    },
+    drinkGate: newGate,
   };
 
   return { state: newState, sipsAwarded: level };
@@ -495,6 +533,7 @@ export function enterTram(state: GameState, tramPlayerId: string, rng: RNG): Gam
     tram,
     currentTurnPlayerId: tramPlayerId,
     winnerId: null,
+    drinkGate: null,
   };
 }
 
@@ -563,6 +602,7 @@ export function tramGuess(
         status: 'ended',
         tram: { ...state.tram, deck: remainingDeck, lastCard: card, streak: newStreak, streakCards: newStreakCards },
         winnerId: playerId,
+        drinkGate: null,
       };
       return { state: newState, card, correct: true, isReference: false };
     }
@@ -573,14 +613,71 @@ export function tramGuess(
       streak: newStreak,
       streakCards: newStreakCards,
     };
-    return { state: { ...state, tram: newTram }, card, correct: true, isReference: false };
+    return { state: { ...state, tram: newTram, drinkGate: null }, card, correct: true, isReference: false };
   } else {
-    // Błąd — gracz pije, reset (nowa talia)
-    const updatedPlayers = state.players.map((p) =>
-      p.id === playerId ? { ...p, sips: p.sips + 1 } : p,
-    );
-    const stateAfterSip = { ...state, players: updatedPlayers };
-    const resetState = enterTram(stateAfterSip, playerId, rng);
-    return { state: resetState, card, correct: false, isReference: false };
+    // Błąd — gracz musi pić, zatrzymujemy grę do potwierdzenia. Reset talii nastąpi po confirmDrink.
+    const newTram: TramSubState = {
+      ...state.tram,
+      deck: remainingDeck,
+      lastCard: card,
+    };
+    const gate: DrinkGate = {
+      entries: [{ playerId, sips: 1, reason: 'tram-lost', confirmed: false }],
+      resumeAction: 'tram-restart',
+      context: {
+        streakCards: state.tram.streakCards,
+        tramPlayerId: playerId,
+      },
+    };
+    const newState: GameState = { ...state, tram: newTram, drinkGate: gate };
+    return { state: newState, card, correct: false, isReference: false };
+  }
+}
+
+// ----------------------------------------------------------------
+// DrinkGate — potwierdzenie picia
+// ----------------------------------------------------------------
+
+/**
+ * Gracz potwierdza wypicie swojej kary.
+ * Gdy wszyscy wskazani gracze potwierdzą — sipsy zostają zapisane i gra rusza dalej.
+ * Idempotentne: kolejne wywołanie dla już-potwierdzonego gracza to no-op.
+ */
+export function confirmDrink(state: GameState, playerId: string, rng: RNG): GameState {
+  if (!state.drinkGate) return state;
+
+  const entryIdx = state.drinkGate.entries.findIndex((e) => e.playerId === playerId);
+  if (entryIdx === -1) return state; // nie w gate
+  if (state.drinkGate.entries[entryIdx].confirmed) return state; // już potwierdzone
+
+  const updatedEntries = state.drinkGate.entries.map((e, i) =>
+    i === entryIdx ? { ...e, confirmed: true } : e,
+  );
+
+  const allConfirmed = updatedEntries.every((e) => e.confirmed);
+
+  if (!allConfirmed) {
+    return { ...state, drinkGate: { ...state.drinkGate, entries: updatedEntries } };
+  }
+
+  // Wszyscy potwierdzili — zapisz sipsy i wykonaj resumeAction
+  const updatedPlayers = state.players.map((p) => {
+    const entry = updatedEntries.find((e) => e.playerId === p.id);
+    if (!entry) return p;
+    return { ...p, sips: p.sips + entry.sips };
+  });
+
+  const resume = state.drinkGate.resumeAction;
+  const ctx = state.drinkGate.context;
+  const stateAfterSips: GameState = { ...state, players: updatedPlayers, drinkGate: null };
+
+  switch (resume) {
+    case 'collecting-next':
+      return advanceCollecting(stateAfterSips);
+    case 'pyramid-next':
+      // Host sam kliknie "Odsłoń następną kartę" po tym jak wszyscy potwierdzą
+      return stateAfterSips;
+    case 'tram-restart':
+      return enterTram(stateAfterSips, ctx!.tramPlayerId!, rng);
   }
 }

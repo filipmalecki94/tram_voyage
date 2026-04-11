@@ -56,6 +56,7 @@ export class RoomManager {
       pyramid: null,
       tram: null,
       winnerId: null,
+      drinkGate: null,
     };
     this.rooms.set(code, state);
     this.meta.set(code, { createdAt: now, lastActivityAt: now });
