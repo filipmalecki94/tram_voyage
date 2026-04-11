@@ -347,16 +347,24 @@ export default function RoomPage() {
                 {/* Runda 1: kolor */}
                 {col.round === 1 && (
                   <div className="grid grid-cols-2 gap-3">
-                    {(['black', 'red'] as const).map((v) => (
-                      <Button
-                        key={v}
-                        variant={selectedAnswer === v ? 'default' : 'outline'}
-                        className="h-16 text-lg"
-                        onClick={() => setSelectedAnswer(v)}
-                      >
-                        {v === 'black' ? '♠♣ Czarna' : '♥♦ Czerwona'}
-                      </Button>
-                    ))}
+                    {(['black', 'red'] as const).map((v) => {
+                      const isBlack = v === 'black';
+                      const selected = selectedAnswer === v;
+                      return (
+                        <Button
+                          key={v}
+                          variant="outline"
+                          className={`h-16 text-lg border-2 ${
+                            isBlack
+                              ? `border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : ''}`
+                              : `border-red-600 text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : ''}`
+                          }`}
+                          onClick={() => setSelectedAnswer(v)}
+                        >
+                          {isBlack ? 'Czarna' : 'Czerwona'}
+                        </Button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -388,14 +396,14 @@ export default function RoomPage() {
                       className="h-16 text-lg"
                       onClick={() => setSelectedAnswer('inside')}
                     >
-                      ↔ Pomiędzy
+                      Pomiędzy
                     </Button>
                     <Button
                       variant={selectedAnswer === 'outside' ? 'default' : 'outline'}
                       className="h-16 text-lg"
                       onClick={() => setSelectedAnswer('outside')}
                     >
-                      ⇤⇥ Poza
+                      Poza
                     </Button>
                   </div>
                 )}
@@ -405,15 +413,32 @@ export default function RoomPage() {
                   <div className="grid grid-cols-2 gap-3">
                     {(['spades', 'clubs', 'diamonds', 'hearts'] as Suit[]).map((suit) => {
                       const isRainbow = suit === missing;
+                      const isRed = suit === 'diamonds' || suit === 'hearts';
+                      const selected = selectedAnswer === suit;
+                      if (isRainbow) {
+                        return (
+                          <Button
+                            key={suit}
+                            variant="outline"
+                            className={`h-16 text-lg border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                            onClick={() => setSelectedAnswer(suit)}
+                          >
+                            {SUIT_LABELS[suit]}
+                          </Button>
+                        );
+                      }
                       return (
                         <Button
                           key={suit}
-                          variant={selectedAnswer === suit ? 'default' : 'outline'}
-                          className={`h-16 text-lg relative ${isRainbow ? 'ring-2 ring-offset-1 ring-purple-500 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900' : ''}`}
+                          variant="outline"
+                          className={`h-16 text-lg border-2 ${
+                            isRed
+                              ? `border-red-600 text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : ''}`
+                              : `border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : ''}`
+                          }`}
                           onClick={() => setSelectedAnswer(suit)}
                         >
                           {SUIT_LABELS[suit]}
-                          {isRainbow && <span className="absolute top-1 right-1 text-xs">🌈</span>}
                         </Button>
                       );
                     })}
@@ -513,16 +538,17 @@ export default function RoomPage() {
       })()}
 
       {/* Etap 3 — Tramwaj */}
-      {state.gamePhase === 'tram' && state.tram && (() => {
+      {(state.gamePhase === 'tram' || (state.status === 'ended' && state.tram)) && state.tram && (() => {
         const tram = state.tram;
         const isTramPlayer = tram.tramPlayerId === myPlayerId;
         const tramPlayer = state.players.find((p) => p.id === tram.tramPlayerId);
         const isFirstCard = tram.lastCard === null;
+        const isEnded = state.status === 'ended';
 
         return (
           <div className="flex flex-col gap-4 mt-2">
             {/* Karta referencyjna */}
-            {tram.lastCard && (
+            {tram.lastCard && !isEnded && (
               <div className="flex flex-col items-center gap-2">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">
                   Ostatnia karta
@@ -531,23 +557,41 @@ export default function RoomPage() {
               </div>
             )}
 
-            {/* Licznik streak */}
-            <div className="flex items-center justify-center gap-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div
-                  key={i}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
-                    i <= tram.streak
-                      ? 'bg-green-500 border-green-500 text-white'
-                      : 'border-muted-foreground text-muted-foreground'
-                  }`}
-                >
-                  {i}
-                </div>
-              ))}
+            {/* Streak jako karty */}
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-widest">Streak</p>
+              <div className="flex items-end justify-center gap-1">
+                {[0, 1, 2, 3, 4].map((i) => {
+                  const revealed = tram.streakCards[i];
+                  return revealed
+                    ? <Card key={i} card={revealed} size="sm" />
+                    : <Card key={i} faceDown size="sm" />;
+                })}
+              </div>
             </div>
 
-            {isTramPlayer ? (
+            {isEnded ? (
+              <div className="flex flex-col items-center gap-3 mt-2">
+                <h2 className="text-2xl font-bold">Koniec gry!</h2>
+                {state.winnerId && (
+                  <p className="text-lg text-center">
+                    Tramwajarz:{' '}
+                    <strong>{state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}</strong>{' '}
+                    dojedzie!
+                  </p>
+                )}
+                <p className="text-muted-foreground text-center text-sm">
+                  Sprawdźcie kto pije ile łyków powyżej.
+                </p>
+                <Button
+                  variant="secondary"
+                  className="h-12 w-full"
+                  onClick={handleLeave}
+                >
+                  Opuść pokój
+                </Button>
+              </div>
+            ) : isTramPlayer ? (
               <>
                 {isFirstCard ? (
                   <Button
@@ -581,30 +625,6 @@ export default function RoomPage() {
           </div>
         );
       })()}
-
-      {/* Koniec gry */}
-      {state.status === 'ended' && (
-        <div className="flex flex-col items-center gap-4 mt-2">
-          <h2 className="text-2xl font-bold">Koniec gry!</h2>
-          {state.winnerId && (
-            <p className="text-lg text-center">
-              Tramwajarz:{' '}
-              <strong>{state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}</strong>{' '}
-              dojedzie!
-            </p>
-          )}
-          <p className="text-muted-foreground text-center">
-            Sprawdźcie kto pije ile łyków powyżej.
-          </p>
-          <Button
-            variant="secondary"
-            className="h-12 w-full"
-            onClick={handleLeave}
-          >
-            Opuść pokój
-          </Button>
-        </div>
-      )}
 
       {/* Wachlarz kart */}
       {state.status === 'playing' && myHand.length > 0 && HandFan}

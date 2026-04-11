@@ -202,56 +202,47 @@ export default function TablePage() {
         )}
 
         {/* Etap 3 — Tramwaj */}
-        {state?.gamePhase === 'tram' && state.tram && (
+        {(state?.gamePhase === 'tram' || (state?.status === 'ended' && state.tram)) && state?.tram && (
           <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-4">
-              {state.tram.lastCard && (
-                <div className="flex flex-col items-center gap-2">
-                  <p className="text-xs text-neutral-500 uppercase tracking-widest">Karta</p>
-                  <Card card={state.tram.lastCard} size="lg" />
-                </div>
-              )}
-              <div className="flex flex-col gap-2">
-                <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">Streak</p>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border-2 ${
-                        i <= state.tram!.streak
-                          ? 'bg-green-500 border-green-500 text-white'
-                          : 'border-neutral-600 text-neutral-600'
-                      }`}
-                    >
-                      {i}
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm text-neutral-400 mt-1">
-                  Tramwajarz:{' '}
-                  <strong className="text-white">
-                    {state.players.find((p) => p.id === state.tram!.tramPlayerId)?.nick ?? '?'}
-                  </strong>
-                </p>
+            {state.tram.lastCard && state.status !== 'ended' && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs text-neutral-500 uppercase tracking-widest">Karta referencyjna</p>
+                <Card card={state.tram.lastCard} size="lg" />
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Koniec gry */}
-        {state?.status === 'ended' && (
-          <div className="flex flex-col items-center gap-3 mt-4">
-            <h2 className="text-4xl font-bold">Koniec gry!</h2>
-            {state.winnerId && (
-              <p className="text-xl text-neutral-300">
+            )}
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-xs text-neutral-500 uppercase tracking-widest">Streak</p>
+              <div className="flex gap-2">
+                {[0, 1, 2, 3, 4].map((i) => {
+                  const revealed = state.tram!.streakCards[i];
+                  return revealed
+                    ? <Card key={i} card={revealed} size="md" />
+                    : <Card key={i} faceDown size="md" />;
+                })}
+              </div>
+              <p className="text-sm text-neutral-400">
                 Tramwajarz:{' '}
                 <strong className="text-white">
-                  {state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}
-                </strong>{' '}
-                dojedzie!
+                  {state.players.find((p) => p.id === state.tram!.tramPlayerId)?.nick ?? '?'}
+                </strong>
               </p>
+            </div>
+
+            {state.status === 'ended' && (
+              <div className="flex flex-col items-center gap-3 mt-2">
+                <h2 className="text-4xl font-bold">Koniec gry!</h2>
+                {state.winnerId && (
+                  <p className="text-xl text-neutral-300">
+                    Tramwajarz:{' '}
+                    <strong className="text-white">
+                      {state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}
+                    </strong>{' '}
+                    dojedzie!
+                  </p>
+                )}
+                <p className="text-neutral-400">Sprawdźcie kto pije ile łyków.</p>
+              </div>
             )}
-            <p className="text-neutral-400">Sprawdźcie kto pije ile łyków.</p>
           </div>
         )}
 

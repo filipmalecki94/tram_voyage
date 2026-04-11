@@ -20,15 +20,28 @@ const SUIT_CENTER_SIZE = {
 };
 
 interface Props {
-  card: CardType;
+  card?: CardType;
+  faceDown?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
 
-export function Card({ card, size = 'md' }: Props) {
-  const symbol = SUIT_SYMBOL[card.suit];
-  const isRed = card.suit === 'hearts' || card.suit === 'diamonds';
+export function Card({ card, faceDown = false, size = 'md' }: Props) {
+  if (faceDown) {
+    return (
+      <div
+        className={`relative bg-gradient-to-br from-blue-700 to-blue-900 border-2 border-blue-950 rounded-xl shadow-md flex items-center justify-center select-none ${SIZE_CLASSES[size]}`}
+        aria-label="Karta zakryta"
+      >
+        <span className={`${SUIT_CENTER_SIZE[size]} leading-none text-blue-400 opacity-60`}>♦</span>
+      </div>
+    );
+  }
+
+  const c = card!;
+  const symbol = SUIT_SYMBOL[c.suit];
+  const isRed = c.suit === 'hearts' || c.suit === 'diamonds';
   const colorClass = isRed ? 'text-red-600' : 'text-neutral-900';
-  const label = `${card.rank}${symbol}`;
+  const label = `${c.rank}${symbol}`;
 
   return (
     <div
@@ -37,7 +50,7 @@ export function Card({ card, size = 'md' }: Props) {
     >
       {/* Lewy górny róg */}
       <span className="absolute top-1 left-1.5 leading-none font-bold">
-        {card.rank}
+        {c.rank}
         <br />
         {symbol}
       </span>
@@ -47,7 +60,7 @@ export function Card({ card, size = 'md' }: Props) {
 
       {/* Prawy dolny róg (obrócony) */}
       <span className="absolute bottom-1 right-1.5 leading-none font-bold rotate-180">
-        {card.rank}
+        {c.rank}
         <br />
         {symbol}
       </span>

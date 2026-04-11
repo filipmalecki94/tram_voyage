@@ -36,6 +36,7 @@ export interface TramSubState {
   lastCard: Card | null;
   streak: number;
   tramPlayerId: string;
+  streakCards: Card[];
 }
 
 export interface PublicTramSubState {
@@ -43,6 +44,7 @@ export interface PublicTramSubState {
   lastCard: Card | null;
   streak: number;
   tramPlayerId: string;
+  streakCards: Card[];
 }
 
 export interface Player {
@@ -122,6 +124,7 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
       lastCard: s.tram.lastCard,
       streak: s.tram.streak,
       tramPlayerId: s.tram.tramPlayerId,
+      streakCards: s.tram.streakCards,
     };
   }
 

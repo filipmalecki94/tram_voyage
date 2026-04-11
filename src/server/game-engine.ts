@@ -486,6 +486,7 @@ export function enterTram(state: GameState, tramPlayerId: string, rng: RNG): Gam
     lastCard: null,
     streak: 0,
     tramPlayerId,
+    streakCards: [],
   };
   return {
     ...state,
@@ -553,13 +554,14 @@ export function tramGuess(
 
   if (correct) {
     const newStreak = state.tram.streak + 1;
+    const newStreakCards = [...state.tram.streakCards, card];
     if (newStreak >= 5) {
       // Sukces!
       const newState: GameState = {
         ...state,
         gamePhase: 'ended',
         status: 'ended',
-        tram: { ...state.tram, deck: remainingDeck, lastCard: card, streak: newStreak },
+        tram: { ...state.tram, deck: remainingDeck, lastCard: card, streak: newStreak, streakCards: newStreakCards },
         winnerId: playerId,
       };
       return { state: newState, card, correct: true, isReference: false };
@@ -569,6 +571,7 @@ export function tramGuess(
       deck: remainingDeck,
       lastCard: card,
       streak: newStreak,
+      streakCards: newStreakCards,
     };
     return { state: { ...state, tram: newTram }, card, correct: true, isReference: false };
   } else {

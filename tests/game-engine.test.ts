@@ -694,4 +694,89 @@ describe('tramGuess', () => {
     const state = tramState();
     expect(() => tramGuess(state, 'p2', 'reference', seededRng(1))).toThrow();
   });
+
+  it('streakCards rośnie po każdym trafieniu', () => {
+    let state = tramState();
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+    expect(state.tram!.streakCards).toHaveLength(0);
+
+    const cards: Card[] = [
+      { rank: 5, suit: 'hearts' },
+      { rank: 8, suit: 'clubs' },
+      { rank: 'K', suit: 'diamonds' },
+    ];
+    state = {
+      ...state,
+      tram: { ...state.tram!, lastCard: { rank: 2, suit: 'spades' }, deck: cards, streak: 0 },
+    };
+
+    const r1 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    expect(r1.state.tram!.streakCards).toHaveLength(1);
+    expect(r1.state.tram!.streakCards[0]).toEqual(cards[0]);
+
+    state = r1.state;
+    const r2 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    expect(r2.state.tram!.streakCards).toHaveLength(2);
+
+    state = r2.state;
+    const r3 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    expect(r3.state.tram!.streakCards).toHaveLength(3);
+  });
+
+  it('streakCards resetuje się po pudłe', () => {
+    let state = tramState();
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+
+    const cards: Card[] = [
+      { rank: 5, suit: 'hearts' },
+      { rank: 8, suit: 'clubs' },
+      { rank: 3, suit: 'diamonds' }, // niżej — pudło przy 'higher'
+    ];
+    state = {
+      ...state,
+      tram: { ...state.tram!, lastCard: { rank: 2, suit: 'spades' }, deck: cards, streak: 0 },
+    };
+
+    const r1 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    state = r1.state;
+    expect(state.tram!.streakCards).toHaveLength(1);
+
+    const r2 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    state = r2.state;
+    expect(state.tram!.streakCards).toHaveLength(2);
+
+    // pudło — karta niżej przy guess 'higher'
+    const r3 = tramGuess(state, 'p1', 'higher', seededRng(1));
+    expect(r3.correct).toBe(false);
+    expect(r3.state.tram!.streakCards).toHaveLength(0);
+    expect(r3.state.tram!.streak).toBe(0);
+  });
+
+  it('streakCards ma 5 elementów po wygranej', () => {
+    let state = tramState();
+    const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
+    state = r0.state;
+
+    const cards: Card[] = [
+      { rank: 3, suit: 'spades' },
+      { rank: 5, suit: 'hearts' },
+      { rank: 7, suit: 'clubs' },
+      { rank: 9, suit: 'diamonds' },
+      { rank: 'J', suit: 'spades' },
+    ];
+    state = {
+      ...state,
+      tram: { ...state.tram!, lastCard: { rank: 2, suit: 'spades' }, deck: cards, streak: 0 },
+    };
+
+    for (let i = 0; i < 5; i++) {
+      const r = tramGuess(state, 'p1', 'higher', seededRng(i));
+      state = r.state;
+    }
+
+    expect(state.gamePhase).toBe('ended');
+    expect(state.tram!.streakCards).toHaveLength(5);
+  });
 });

@@ -57,14 +57,14 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-8 max-w-sm mx-auto">
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-5 max-w-sm mx-auto">
       <div className="text-center">
         <h1 className="text-5xl font-bold tracking-tight">Tramwajarz</h1>
         <p className="text-muted-foreground mt-2">Pijacka gra karciana na imprezę</p>
       </div>
 
-      {/* Wspólny nick */}
-      <div className="w-full flex flex-col gap-1">
+      {/* Sekcja 1 — Nick */}
+      <section className="w-full rounded-xl border bg-card p-4 flex flex-col gap-2">
         <label className="text-sm font-medium" htmlFor="nick">
           Twój nick
         </label>
@@ -77,10 +77,11 @@ export default function Page() {
           maxLength={16}
           className="h-12 rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+        <p className="text-xs text-muted-foreground">Potrzebny do stworzenia stołu i dołączenia do gry.</p>
+      </section>
 
-      {/* Stwórz stół */}
-      <div className="w-full flex flex-col gap-2">
+      {/* Sekcja 2 — Start gry */}
+      <section className="w-full rounded-xl border bg-card p-4 flex flex-col gap-3">
         <Button
           className="h-12 text-base w-full"
           disabled={!nickValid || loading !== null}
@@ -91,42 +92,41 @@ export default function Page() {
         {createError && (
           <p className="text-sm text-red-600">{createError}</p>
         )}
-      </div>
 
-      <div className="w-full flex items-center gap-3">
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-xs text-muted-foreground uppercase">lub</span>
-        <div className="flex-1 h-px bg-border" />
-      </div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground uppercase">lub</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
 
-      {/* Dołącz kodem */}
-      <div className="w-full flex flex-col gap-2">
-        <label className="text-sm font-medium" htmlFor="code">
-          Kod pokoju
-        </label>
-        <input
-          id="code"
-          type="text"
-          value={joinCode}
-          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-          placeholder="np. ABC123"
-          maxLength={8}
-          className="h-12 rounded-lg border border-input bg-background px-3 text-base font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <Button
-          variant="secondary"
-          className="h-12 text-base w-full"
-          disabled={!nickValid || codeTrimmed.length < 4 || loading !== null}
-          onClick={handleJoin}
-        >
-          {loading === 'join' ? 'Dołączam...' : 'Dołącz kodem'}
-        </Button>
-        {joinError && (
-          <p className="text-sm text-red-600">
-            {joinError === 'no_room' ? 'Pokój nie istnieje.' : joinError}
-          </p>
-        )}
-      </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium" htmlFor="code">
+            Kod pokoju
+          </label>
+          <input
+            id="code"
+            type="text"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="np. ABC123"
+            maxLength={8}
+            className="h-12 rounded-lg border border-input bg-background px-3 text-base font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <Button
+            variant="secondary"
+            className="h-12 text-base w-full"
+            disabled={!nickValid || codeTrimmed.length < 4 || loading !== null}
+            onClick={handleJoin}
+          >
+            {loading === 'join' ? 'Dołączam...' : 'Dołącz kodem'}
+          </Button>
+          {joinError && (
+            <p className="text-sm text-red-600">
+              {joinError === 'no_room' ? 'Pokój nie istnieje.' : joinError}
+            </p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
