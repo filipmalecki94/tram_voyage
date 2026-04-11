@@ -259,22 +259,22 @@ export default function RoomPage() {
   ) : null;
 
   return (
-    <main className="min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-32">
+    <main className="w-full min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-32">
       {/* Header */}
       <div className="pt-2">
         <p className="text-xs text-muted-foreground uppercase tracking-widest">Kod pokoju</p>
         <h1 className="text-4xl font-bold font-mono tracking-widest">{state.code}</h1>
-        {state.gamePhase === 'collecting' && state.collecting && (
+        {state.gamePhase === 'collecting' && (
           <p className="text-sm text-muted-foreground">
-            Etap 1 — Runda {state.collecting.round}/4
+            Etap 1{state.collecting ? ` — Runda ${state.collecting.round}/4` : ''}
           </p>
         )}
         {state.gamePhase === 'pyramid' && (
           <p className="text-sm text-muted-foreground">Etap 2 — Piramida</p>
         )}
-        {state.gamePhase === 'tram' && state.tram && (
+        {state.gamePhase === 'tram' && (
           <p className="text-sm text-muted-foreground">
-            Etap 3 — Tramwaj (streak {state.tram.streak}/5)
+            Etap 3 — Tramwaj{state.tram ? ` (streak ${state.tram.streak}/5)` : ''}
           </p>
         )}
       </div>
@@ -288,6 +288,11 @@ export default function RoomPage() {
             (state.collecting
               ? state.players[state.collecting.currentPlayerIdx]?.id === player.id
               : state.currentPlayerId === player.id);
+          const isMe = player.id === myPlayerId;
+          const isHost = player.id === state.hostPlayerId;
+          const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
+          const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
+          const inGame = state.status === 'ended' || state.gamePhase !== null;
           return (
             <div
               key={player.id}
@@ -296,31 +301,44 @@ export default function RoomPage() {
               <span
                 className={`w-2 h-2 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
               />
-              <span className="flex-1 font-medium">{player.nick}</span>
-              {player.id === myPlayerId && (
-                <span className="text-xs opacity-70">(ty)</span>
-              )}
-              {player.id === state.hostPlayerId && (
-                <span className="text-xs opacity-70">(host)</span>
-              )}
-              {(state.status === 'ended' || state.gamePhase !== null) && (
-                <span className="text-xs ml-1">🍺 {player.sips}</span>
+              <span
+                className={cn(
+                  'flex-1 font-medium truncate',
+                  isHost && !isCurrentTurn && 'text-yellow-500',
+                  isHost && isCurrentTurn && 'text-yellow-300',
+                  isMe && 'underline',
+                )}
+              >
+                {player.nick}
+              </span>
+              {/* Prawa strona — stała szerokość: badge (invisible gdy 0) + licznik */}
+              {inGame && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span
+                    className={cn(
+                      'text-xs px-1.5 py-0.5 rounded font-semibold tabular-nums',
+                      pendingSips > 0 ? 'bg-amber-500 text-white' : 'invisible',
+                    )}
+                  >
+                    +{pendingSips}
+                  </span>
+                  <span className="text-xs tabular-nums w-9 text-right">🍺 {player.sips}</span>
+                </div>
               )}
             </div>
           );
         })}
       </div>
 
-      {/* DrinkGate — przystanek na picie */}
-      {state.drinkGate && (() => {
+      {/* DrinkGate — przystanek na picie (tylko tram-restart; collecting i pyramid obsługują slot inline) */}
+      {state.drinkGate?.resumeAction === 'tram-restart' && (() => {
         const gate = state.drinkGate!;
         const myEntry = gate.entries.find((e) => e.playerId === myPlayerId);
-        const isTramRestart = gate.resumeAction === 'tram-restart';
         const confirmedCount = gate.entries.filter((e) => e.confirmed).length;
 
         return (
           <div className="flex flex-col gap-3 rounded-xl border border-amber-500 bg-amber-500/10 p-4">
-            {isTramRestart && gate.context?.streakCards && gate.context.streakCards.length > 0 && (
+            {gate.context?.streakCards && gate.context.streakCards.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-semibold text-amber-400">Karty z tego podejścia:</p>
                 <div className="flex gap-1 flex-wrap">
@@ -335,7 +353,7 @@ export default function RoomPage() {
                 className="h-16 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
                 onClick={handleConfirmDrink}
               >
-                {isTramRestart ? 'Jadę dalej' : `Wypiłem 🍺 ${myEntry.sips}`}
+                Jadę dalej
               </Button>
             ) : myEntry?.confirmed ? (
               <p className="text-center text-emerald-400 font-medium py-2">
@@ -377,8 +395,9 @@ export default function RoomPage() {
       )}
 
       {/* Etap 1 — Zbieranie */}
-      {state.gamePhase === 'collecting' && state.collecting && (() => {
+      {state.gamePhase === 'collecting' && (() => {
         const col = state.collecting;
+        if (!col) return <div className="flex flex-col gap-4 mt-2"><p className="text-center text-muted-foreground py-4">Ładowanie…</p></div>;
         const isMyTurn = state.players[col.currentPlayerIdx]?.id === myPlayerId;
         const currentPlayer = state.players[col.currentPlayerIdx];
         const rainbowAvail = isMyTurn && isRainbowAvailable(myHand);
@@ -495,13 +514,36 @@ export default function RoomPage() {
                   </div>
                 )}
 
-                <Button
-                  className="h-14 text-xl w-full mt-2"
-                  disabled={!selectedAnswer}
-                  onClick={handleCollectingGuess}
-                >
-                  Ciągnij kartę
-                </Button>
+                {(() => {
+                  const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
+                  const pendingMyDrink = myEntry && !myEntry.confirmed;
+                  if (pendingMyDrink) {
+                    return (
+                      <Button
+                        className="h-14 text-xl w-full mt-2 bg-amber-500 hover:bg-amber-600 text-white"
+                        onClick={handleConfirmDrink}
+                      >
+                        Wypiłem 🍺 {myEntry!.sips}
+                      </Button>
+                    );
+                  }
+                  if (myEntry?.confirmed) {
+                    return (
+                      <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium mt-2">
+                        ✓ Wypiłem — czekamy na innych
+                      </p>
+                    );
+                  }
+                  return (
+                    <Button
+                      className="h-14 text-xl w-full mt-2"
+                      disabled={!selectedAnswer}
+                      onClick={handleCollectingGuess}
+                    >
+                      Ciągnij kartę
+                    </Button>
+                  );
+                })()}
               </>
             )}
           </div>
@@ -527,56 +569,87 @@ export default function RoomPage() {
                   <Card card={currentCard} size="lg" />
                 </div>
 
-                {canAssign && myDeal && (
-                  <div className="flex flex-col gap-2">
-                    {(() => {
-                      const pool = myDeal.remainingSips;
-                      const totalPool = myDeal.totalSips;
-                      const alreadyGiven = totalPool - pool;
-                      return (
-                        <>
-                          <p className="text-sm font-medium text-center">
-                            {alreadyGiven > 0
-                              ? `Zostało ${pool} z ${totalPool} kolejek — każ pić:`
-                              : `Masz kartę! ${totalPool > 1 ? `Rozdaj ${totalPool} kolejki:` : 'Każ komuś pić:'}`}
+                {/* Slot CTA: grid rozdawania kolejek (gdy canAssign) lub brak akcji */}
+                {(() => {
+                  const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
+                  const pendingMyDrink = myEntry && !myEntry.confirmed;
+
+                  if (canAssign && myDeal) {
+                    const pool = myDeal.remainingSips;
+                    const totalPool = myDeal.totalSips;
+                    const alreadyGiven = totalPool - pool;
+                    return (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-sm font-medium text-center">
+                          {alreadyGiven > 0
+                            ? `Zostało ${pool} z ${totalPool} kolejek — każ pić:`
+                            : `Masz kartę! ${totalPool > 1 ? `Rozdaj ${totalPool} kolejki:` : 'Każ komuś pić:'}`}
+                        </p>
+                        <div className="flex gap-1 justify-center">
+                          {Array.from({ length: totalPool }).map((_, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                'h-2 w-6 rounded-full transition-colors duration-200',
+                                i < alreadyGiven ? 'bg-primary/40' : 'bg-primary',
+                              )}
+                            />
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {allPlayers.map((p) => (
+                            <Button
+                              key={p.id}
+                              variant="outline"
+                              className="h-12"
+                              onClick={() => handlePyramidAssign(p.id, 1)}
+                            >
+                              {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}
+                            </Button>
+                          ))}
+                        </div>
+                        {pendingMyDrink && (
+                          <Button
+                            className="h-14 text-xl w-full mt-1 bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={handleConfirmDrink}
+                          >
+                            Wypiłem 🍺 {myEntry!.sips}
+                          </Button>
+                        )}
+                        {myEntry?.confirmed && (
+                          <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+                            ✓ Wypiłem — czekamy na innych
                           </p>
+                        )}
+                      </div>
+                    );
+                  }
 
-                          {/* Pasek postępu rozdawania */}
-                          <div className="flex gap-1 justify-center">
-                            {Array.from({ length: totalPool }).map((_, i) => (
-                              <div
-                                key={i}
-                                className={cn(
-                                  'h-2 w-6 rounded-full transition-colors duration-200',
-                                  i < alreadyGiven ? 'bg-primary/40' : 'bg-primary',
-                                )}
-                              />
-                            ))}
-                          </div>
+                  if (pendingMyDrink) {
+                    return (
+                      <Button
+                        className="h-14 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+                        onClick={handleConfirmDrink}
+                      >
+                        Wypiłem 🍺 {myEntry!.sips}
+                      </Button>
+                    );
+                  }
 
-                          <div className="grid grid-cols-2 gap-2">
-                            {allPlayers.map((p) => (
-                              <Button
-                                key={p.id}
-                                variant="outline"
-                                className="h-12"
-                                onClick={() => handlePyramidAssign(p.id, 1)}
-                              >
-                                {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}
-                              </Button>
-                            ))}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                  if (myEntry?.confirmed) {
+                    return (
+                      <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+                        ✓ Wypiłem — czekamy na innych
+                      </p>
+                    );
+                  }
 
-                {!canAssign && (
-                  <p className="text-center text-muted-foreground py-2">
-                    Nie masz pasującej karty.
-                  </p>
-                )}
+                  return (
+                    <p className="h-14 flex items-center justify-center text-center text-muted-foreground">
+                      Nie masz pasującej karty.
+                    </p>
+                  );
+                })()}
               </>
             ) : (
               <p className="text-center text-muted-foreground py-4">
@@ -594,23 +667,6 @@ export default function RoomPage() {
               </Button>
             )}
 
-            {/* Liczniki łyków z bieżącej karty — z drinkGate */}
-            {currentCard && state.drinkGate && state.drinkGate.entries.length > 0 && (
-              <div className="mt-2 flex flex-col gap-1">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">
-                  Łyki za tę kartę
-                </p>
-                {state.drinkGate.entries.map((entry) => {
-                  const player = state.players.find((p) => p.id === entry.playerId);
-                  return (
-                    <div key={entry.playerId} className="flex justify-between px-2 py-1 bg-muted rounded">
-                      <span>{player?.nick ?? entry.playerId}</span>
-                      <span className="font-bold">🍺 {entry.sips} {entry.confirmed ? '✓' : '…'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         );
       })()}
