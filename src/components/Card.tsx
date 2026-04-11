@@ -12,6 +12,7 @@ const SIZE_CLASSES = {
   md: 'w-24 h-36 text-sm',
   lg: 'w-40 h-56 text-base',
   xl: 'w-56 h-80 text-2xl',
+  fill: 'w-full h-full',
 };
 
 const SUIT_CENTER_SIZE = {
@@ -19,22 +20,32 @@ const SUIT_CENTER_SIZE = {
   md: 'text-5xl',
   lg: 'text-7xl',
   xl: 'text-9xl',
+  fill: '',
 };
 
 interface Props {
   card?: CardType;
   faceDown?: boolean;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'fill';
 }
 
 export function Card({ card, faceDown = false, size = 'md' }: Props) {
+  const isFill = size === 'fill';
+  const cornerStyle = isFill ? { fontSize: 'clamp(0.5rem, 10cqw, 2.5rem)' } : undefined;
+  const centerStyle = isFill ? { fontSize: 'clamp(1rem, 50cqw, 12rem)' } : undefined;
+
   if (faceDown) {
     return (
       <div
-        className={`relative bg-gradient-to-br from-blue-700 to-blue-900 border-2 border-blue-950 rounded-xl shadow-md flex items-center justify-center select-none ${SIZE_CLASSES[size]}`}
+        className={`@container relative bg-gradient-to-br from-blue-700 to-blue-900 border-2 border-blue-950 rounded-xl shadow-md flex items-center justify-center select-none ${SIZE_CLASSES[size]}`}
         aria-label="Karta zakryta"
       >
-        <span className={`${SUIT_CENTER_SIZE[size]} leading-none text-blue-400 opacity-60`}>♦</span>
+        <span
+          className={`${SUIT_CENTER_SIZE[size]} leading-none text-blue-400 opacity-60`}
+          style={centerStyle}
+        >
+          ♦
+        </span>
       </div>
     );
   }
@@ -47,21 +58,21 @@ export function Card({ card, faceDown = false, size = 'md' }: Props) {
 
   return (
     <div
-      className={`relative bg-white border-2 border-neutral-300 rounded-xl shadow-md flex items-center justify-center select-none ${SIZE_CLASSES[size]} ${colorClass}`}
+      className={`@container relative bg-white border-2 border-neutral-300 rounded-xl shadow-md flex items-center justify-center select-none ${SIZE_CLASSES[size]} ${colorClass}`}
       aria-label={label}
     >
       {/* Lewy górny róg */}
-      <span className="absolute top-1 left-1.5 leading-none font-bold">
+      <span className="absolute top-1 left-1.5 leading-none font-bold" style={cornerStyle}>
         {c.rank}
         <br />
         {symbol}
       </span>
 
       {/* Środek */}
-      <span className={`${SUIT_CENTER_SIZE[size]} leading-none`}>{symbol}</span>
+      <span className={`${SUIT_CENTER_SIZE[size]} leading-none`} style={centerStyle}>{symbol}</span>
 
       {/* Prawy dolny róg (obrócony) */}
-      <span className="absolute bottom-1 right-1.5 leading-none font-bold rotate-180">
+      <span className="absolute bottom-1 right-1.5 leading-none font-bold rotate-180" style={cornerStyle}>
         {c.rank}
         <br />
         {symbol}

@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { Card } from '@/components/Card';
 import { QrPoster } from '@/components/QrPoster';
 import { useRoom } from '@/lib/use-room';
+import type { Card as CardType, DrinkGate, PublicPlayer } from '@/shared/types';
 
 const AVATAR_COLORS = [
   'bg-red-500',
@@ -20,6 +21,67 @@ function hashNick(nick: string): number {
   let h = 0;
   for (let i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) | 0;
   return Math.abs(h);
+}
+
+function RightCardPanel({
+  card,
+  label,
+  drinkGate,
+  players,
+}: {
+  card: CardType | null;
+  label: string;
+  drinkGate: DrinkGate | null;
+  players: PublicPlayer[];
+}) {
+  return (
+    <div className="w-1/2 flex flex-col border-l border-neutral-800 bg-neutral-900/20 min-h-0 p-4">
+      {drinkGate ? (
+        /* Panel picia — zastępuje kartę */
+        <div className="flex-1 flex flex-col items-center justify-start gap-6 pt-4">
+          <p className="text-lg font-semibold text-amber-400 uppercase tracking-widest">
+            Przystanek — picie
+          </p>
+          <div className="flex flex-col gap-3 w-full max-w-sm px-3">
+            {drinkGate.entries.map((entry) => {
+              const player = players.find((p) => p.id === entry.playerId);
+              return (
+                <div
+                  key={entry.playerId}
+                  className="grid items-center bg-neutral-800 rounded-xl px-4 py-3"
+                  style={{ gridTemplateColumns: '1fr 1.5rem 2rem 1.5rem' }}
+                >
+                  <span className={`text-lg font-medium truncate ${entry.confirmed ? 'line-through text-neutral-500' : 'text-white'}`}>
+                    {player?.nick ?? entry.playerId}
+                  </span>
+                  <span className="text-xl text-center">🍺</span>
+                  <span className="text-xl font-bold text-amber-300 text-left tabular-nums px-2">
+                    {entry.sips}
+                  </span>
+                  <span className={`text-lg text-center ${entry.confirmed ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {entry.confirmed ? '✓' : '⏳'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* Panel karty */
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex items-center justify-center min-h-0">
+            {card ? (
+              <div className="h-full aspect-[5/7] max-w-full">
+                <Card card={card} size="fill" />
+              </div>
+            ) : (
+              <p className="text-neutral-700 text-lg">Oczekiwanie na odsłonięcie…</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TablePage() {
@@ -133,8 +195,8 @@ export default function TablePage() {
           </div>
         )}
 
-        {/* DrinkGate banner — widoczny we wszystkich fazach gdy ktoś musi potwierdzić picie */}
-        {state?.drinkGate && (
+        {/* DrinkGate banner — tylko w Etapie 1 (zbieranie); Etap 2/3 obsługuje to w RightCardPanel */}
+        {state?.drinkGate && state.gamePhase === 'collecting' && (
           <div className="rounded-xl border border-amber-500 bg-amber-500/10 px-4 py-3 flex flex-col gap-2">
             <p className="text-sm font-semibold text-amber-400 uppercase tracking-widest">
               Przystanek — picie
@@ -160,25 +222,6 @@ export default function TablePage() {
           </div>
         )}
 
-        {/* Etap 3 — ekran przegranej tramwajarza */}
-        {state?.drinkGate?.resumeAction === 'tram-restart' && state.drinkGate.context && (
-          <div className="rounded-xl border border-red-500 bg-red-500/10 px-4 py-4 flex flex-col gap-3">
-            <p className="text-xl font-bold text-red-400">
-              {state.players.find((p) => p.id === state.drinkGate!.context!.tramPlayerId)?.nick ?? '?'} przegrał — zaczyna od nowa
-            </p>
-            {state.drinkGate.context.streakCards && state.drinkGate.context.streakCards.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <p className="text-xs text-neutral-400 uppercase tracking-widest">Karty z tego podejścia:</p>
-                <div className="flex gap-2 flex-wrap">
-                  {state.drinkGate.context.streakCards.map((c, i) => (
-                    <Card key={i} card={c} size="md" />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Etap 1 — aktywna tura */}
         {state?.gamePhase === 'collecting' && state.collecting && !state.drinkGate && (() => {
           const currentPlayer = state.players[state.collecting.currentPlayerIdx];
@@ -194,15 +237,12 @@ export default function TablePage() {
         {state?.gamePhase === 'pyramid' && state.pyramid && (
           <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
             {/* Lewa część — piramida */}
-            <div className="flex flex-col gap-4 px-8 pt-0 pb-8 overflow-y-auto shrink-0">
-              <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest">
-                Piramida
-              </p>
-              <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col min-h-0 w-1/2 p-4">
+              <div className="flex flex-col flex-1 min-h-0 justify-around gap-2">
                 {state.pyramid.layout.map((levelCards, lvlIdx) => {
                   const level = lvlIdx + 1;
                   return (
-                    <div key={lvlIdx} className="flex gap-2 justify-center" aria-label={`Poziom ${level} — ${level} kolejki`}>
+                    <div key={lvlIdx} className="flex justify-center items-center gap-2 flex-1 min-h-0" aria-label={`Poziom ${level} — ${level} kolejki`}>
                       {levelCards.map((card, cardIdx) => {
                         const isRevealed = card !== null;
                         const isCurrent =
@@ -213,16 +253,16 @@ export default function TablePage() {
                         return (
                           <div
                             key={cardIdx}
-                            className={`rounded-lg border-2 ${
+                            className={`h-full aspect-[5/7] rounded-lg border-2 shrink-0 ${
                               isCurrent
                                 ? 'border-yellow-400 shadow-lg shadow-yellow-400/30'
                                 : 'border-neutral-700'
                             }`}
                           >
                             {isRevealed ? (
-                              <Card card={card} size="sm" />
+                              <Card card={card} size="fill" />
                             ) : (
-                              <div className="w-16 h-24 bg-neutral-700 rounded-md flex items-center justify-center text-neutral-500 text-xs">
+                              <div className="w-full h-full bg-neutral-700 rounded-md flex items-center justify-center text-neutral-500 text-xs">
                                 ?
                               </div>
                             )}
@@ -233,84 +273,81 @@ export default function TablePage() {
                   );
                 })}
               </div>
-
-              {/* Łyki za bieżącą kartę — z drinkGate */}
-              {state.pyramid.currentCard && state.drinkGate && state.drinkGate.entries.length > 0 && (
-                <div className="mt-4 flex flex-col gap-1">
-                  <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">
-                    Łyki za tę kartę
-                  </p>
-                  {state.drinkGate.entries.map((entry) => {
-                    const player = state.players.find((p) => p.id === entry.playerId);
-                    return (
-                      <div key={entry.playerId} className="flex justify-between text-sm bg-neutral-800 px-3 py-1 rounded">
-                        <span>{player?.nick ?? entry.playerId}</span>
-                        <span className="font-bold">🍺 {entry.sips} {entry.confirmed ? '✓' : '…'}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
-            {/* Prawa część — aktualnie grana karta (pełna wysokość) */}
-            <div className="flex-1 flex flex-col items-center justify-center border-l border-neutral-800 bg-neutral-900/20 gap-4 pb-8">
-              {state.pyramid.currentCard ? (
-                <>
-                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest">
-                    Aktualna karta
-                  </p>
-                  <Card card={state.pyramid.currentCard} size="xl" />
-                </>
-              ) : (
-                <p className="text-neutral-700 text-lg">Oczekiwanie na odsłonięcie…</p>
-              )}
-            </div>
+            {/* Prawa część — aktualna karta lub panel picia */}
+            <RightCardPanel
+              card={state.pyramid.currentCard}
+              label="Aktualna karta"
+              drinkGate={state.drinkGate}
+              players={state.players}
+            />
           </div>
         )}
 
         {/* Etap 3 — Tramwaj */}
         {(state?.gamePhase === 'tram' || (state?.status === 'ended' && state.tram)) && state?.tram && (
-          <div className="flex flex-col gap-6">
-            {state.tram.lastCard && state.status !== 'ended' && (
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-xs text-neutral-500 uppercase tracking-widest">Karta referencyjna</p>
-                <Card card={state.tram.lastCard} size="lg" />
+          <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
+            {/* Lewa część — streak + nick tramwajarza + tram-restart overlay + ended banner */}
+            <div className="flex flex-col gap-4 px-8 pb-8 overflow-y-auto w-1/2">
+              {/* tram-restart overlay — kto przegrał i jakie karty miał */}
+              {state.drinkGate?.resumeAction === 'tram-restart' && state.drinkGate.context && (
+                <div className="rounded-xl border border-red-500 bg-red-500/10 px-4 py-4 flex flex-col gap-3">
+                  <p className="text-xl font-bold text-red-400">
+                    {state.players.find((p) => p.id === state.drinkGate!.context!.tramPlayerId)?.nick ?? '?'} przegrał — zaczyna od nowa
+                  </p>
+                  {state.drinkGate.context.streakCards && state.drinkGate.context.streakCards.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs text-neutral-400 uppercase tracking-widest">Karty z tego podejścia:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {state.drinkGate.context.streakCards.map((c, i) => (
+                          <Card key={i} card={c} size="md" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 w-full flex-1 justify-center">
+                <div className="grid grid-cols-5 gap-2 w-full">
+                  {[0, 1, 2, 3, 4].map((i) => {
+                    const revealed = state.tram!.streakCards[i];
+                    return (
+                      <div key={i} className="aspect-[5/7] w-full">
+                        {revealed
+                          ? <Card card={revealed} size="fill" />
+                          : <Card faceDown size="fill" />}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            )}
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-xs text-neutral-500 uppercase tracking-widest">Streak</p>
-              <div className="flex gap-2">
-                {[0, 1, 2, 3, 4].map((i) => {
-                  const revealed = state.tram!.streakCards[i];
-                  return revealed
-                    ? <Card key={i} card={revealed} size="md" />
-                    : <Card key={i} faceDown size="md" />;
-                })}
-              </div>
-              <p className="text-sm text-neutral-400">
-                Tramwajarz:{' '}
-                <strong className="text-white">
-                  {state.players.find((p) => p.id === state.tram!.tramPlayerId)?.nick ?? '?'}
-                </strong>
-              </p>
+
+              {state.status === 'ended' && (
+                <div className="flex flex-col items-center gap-3 mt-2">
+                  <h2 className="text-4xl font-bold">Koniec gry!</h2>
+                  {state.winnerId && (
+                    <p className="text-xl text-neutral-300">
+                      Tramwajarz:{' '}
+                      <strong className="text-white">
+                        {state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}
+                      </strong>{' '}
+                      dojedzie!
+                    </p>
+                  )}
+                  <p className="text-neutral-400">Sprawdźcie kto pije ile łyków.</p>
+                </div>
+              )}
             </div>
 
-            {state.status === 'ended' && (
-              <div className="flex flex-col items-center gap-3 mt-2">
-                <h2 className="text-4xl font-bold">Koniec gry!</h2>
-                {state.winnerId && (
-                  <p className="text-xl text-neutral-300">
-                    Tramwajarz:{' '}
-                    <strong className="text-white">
-                      {state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}
-                    </strong>{' '}
-                    dojedzie!
-                  </p>
-                )}
-                <p className="text-neutral-400">Sprawdźcie kto pije ile łyków.</p>
-              </div>
-            )}
+            {/* Prawa część — karta referencyjna lub panel picia */}
+            <RightCardPanel
+              card={state.tram.lastCard}
+              label="Karta referencyjna"
+              drinkGate={state.drinkGate?.resumeAction !== 'tram-restart' ? state.drinkGate : null}
+              players={state.players}
+            />
           </div>
         )}
 
