@@ -543,6 +543,28 @@ export function enterTram(state: GameState, tramPlayerId: string, rng: RNG): Gam
   };
 }
 
+/**
+ * Restart streaka po błędnym zgadnięciu w Etapie 3.
+ * Zachowuje istniejący deck (wspólna pula dla całego etapu),
+ * resetuje tylko progres streaka i kartę referencyjną.
+ */
+export function restartTramStreak(state: GameState): GameState {
+  if (!state.tram) {
+    throw new Error('Nie w fazie tramwaju');
+  }
+  return {
+    ...state,
+    tram: {
+      ...state.tram,
+      lastCard: null,
+      streak: 0,
+      streakCards: [],
+    },
+    currentTurnPlayerId: state.tram.tramPlayerId,
+    drinkGate: null,
+  };
+}
+
 export interface TramGuessResult {
   state: GameState;
   card: Card;
@@ -568,11 +590,11 @@ export function tramGuess(
   if (state.tram.tramPlayerId !== playerId) {
     throw new Error('Nie jesteś tramwajarzem');
   }
-  if (state.tram.deck.length === 0) {
-    throw new Error('Talia tramwaju jest pusta');
-  }
+  // Gdy pula wyczerpana — tasujemy świeżą talię 52 i kontynuujemy streak
+  const sourceDeck =
+    state.tram.deck.length === 0 ? shuffle(createDeck(), rng) : state.tram.deck;
 
-  const [card, ...remainingDeck] = state.tram.deck;
+  const [card, ...remainingDeck] = sourceDeck;
   const isReference = state.tram.lastCard === null;
 
   if (isReference) {
@@ -684,6 +706,6 @@ export function confirmDrink(state: GameState, playerId: string, rng: RNG): Game
       // Host sam kliknie "Odsłoń następną kartę" po tym jak wszyscy potwierdzą
       return stateAfterSips;
     case 'tram-restart':
-      return enterTram(stateAfterSips, ctx!.tramPlayerId!, rng);
+      return restartTramStreak(stateAfterSips);
   }
 }

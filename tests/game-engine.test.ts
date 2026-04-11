@@ -822,6 +822,37 @@ describe('tramGuess', () => {
     expect(state.gamePhase).toBe('ended');
     expect(state.tram!.streakCards).toHaveLength(5);
   });
+
+  it('re-tasuje deck gdy pula wyczerpana', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const s = enterTram(base, 'p1', seededRng(1));
+    const emptyState: RoomState = {
+      ...s,
+      tram: { ...s.tram!, deck: [], lastCard: { rank: 2, suit: 'spades' }, streak: 0 },
+    };
+    // Nie rzuca — ciągnie z świeżo przetasowanej talii 52 (pozostałe = 51)
+    const r = tramGuess(emptyState, 'p1', 'higher', seededRng(42));
+    expect(r.card).toBeDefined();
+    expect(r.state.tram!.deck.length).toBe(51);
+  });
+
+  it('po błędzie confirmDrink kontynuuje ten sam deck', () => {
+    const base = createGame(makePlayers(2), seededRng(1));
+    const s = enterTram(base, 'p1', seededRng(1));
+    const refCard: Card = { rank: 10, suit: 'spades' };
+    const wrongCard: Card = { rank: 'A', suit: 'hearts' }; // wyżej, guess lower
+    const prepared: RoomState = {
+      ...s,
+      tram: { ...s.tram!, lastCard: refCard, deck: [wrongCard, ...s.tram!.deck.slice(1)], streak: 2 },
+    };
+    const r1 = tramGuess(prepared, 'p1', 'lower', seededRng(1));
+    const deckAfterWrong = r1.state.tram!.deck;
+    const after = confirmDrink(r1.state, 'p1', seededRng(1));
+    expect(after.tram!.deck).toEqual(deckAfterWrong); // deck bez re-tasowania
+    expect(after.tram!.deck.length).toBe(deckAfterWrong.length);
+    expect(after.tram!.streak).toBe(0);
+    expect(after.tram!.lastCard).toBeNull();
+  });
 });
 
 // ----------------------------------------------------------------
@@ -916,7 +947,7 @@ describe('confirmDrink', () => {
     expect(() => pyramidNext(afterConfirm, seededRng(1))).not.toThrow();
   });
 
-  it('tram — confirmDrink resetuje talię (enterTram)', () => {
+  it('tram — confirmDrink resetuje streak ale zachowuje deck', () => {
     const base = createGame(makePlayers(2), seededRng(1));
     const s = enterTram(base, base.players[0].id, seededRng(1));
 
@@ -934,12 +965,15 @@ describe('confirmDrink', () => {
     expect(r1.state.drinkGate).not.toBeNull();
     expect(r1.state.drinkGate!.context!.streakCards).toHaveLength(2);
 
+    const deckBeforeConfirm = r1.state.tram!.deck; // deck po pop wrong-card'a
+
     const afterConfirm = confirmDrink(r1.state, r1.state.tram!.tramPlayerId, seededRng(1));
-    // enterTram wywołane: reset streak, nowa talia
+    // Streak zresetowany, ale deck zachowany (ta sama pula, nie nowa talia)
     expect(afterConfirm.drinkGate).toBeNull();
     expect(afterConfirm.tram!.streak).toBe(0);
     expect(afterConfirm.tram!.streakCards).toHaveLength(0);
     expect(afterConfirm.tram!.lastCard).toBeNull();
+    expect(afterConfirm.tram!.deck).toEqual(deckBeforeConfirm);
     expect(afterConfirm.players.find((p) => p.id === r1.state.tram!.tramPlayerId)!.sips).toBe(1);
   });
 });
