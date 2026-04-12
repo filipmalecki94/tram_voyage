@@ -65,6 +65,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           envs: GH_TOKEN,GH_ACTOR
+          command_timeout: 30m
           script: |
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
             cd ~/tramwajarz
