@@ -242,7 +242,7 @@ describe('collectingGuess — Runda 2', () => {
       ...state,
       deck: [topCard, ...createDeck().slice(2)],
       players,
-      collecting: { round: 2, currentPlayerIdx: 0, pendingConfirm: null },
+      collecting: { round: 2, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
     };
   }
 
@@ -280,7 +280,7 @@ describe('collectingGuess — Runda 3', () => {
       ...state,
       deck: [topCard, ...createDeck().slice(3)],
       players,
-      collecting: { round: 3, currentPlayerIdx: 0, pendingConfirm: null },
+      collecting: { round: 3, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
     };
   }
 
@@ -329,7 +329,7 @@ describe('collectingGuess — Runda 4 (symbol + tęcza)', () => {
       ...state,
       deck: [topCard, ...createDeck().slice(4)],
       players,
-      collecting: { round: 4, currentPlayerIdx: 0, pendingConfirm: null },
+      collecting: { round: 4, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
     };
   }
 
