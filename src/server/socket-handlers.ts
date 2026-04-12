@@ -139,7 +139,7 @@ export function registerSocketHandlers(
       if (room.players.length < 2) return cb({ ok: false, error: 'not_enough_players' });
 
       const gameBase = createGame(room.players, Math.random);
-      const newState = startCollecting({ ...gameBase, code: roomCode }, Math.random);
+      const newState = startCollecting({ ...gameBase, code: roomCode, hostId: room.hostId }, Math.random);
       rooms.updateRoom(roomCode, newState);
       io.to(roomCode).emit('room:state', toPublicRoomState(newState));
       cb({ ok: true, data: null });
