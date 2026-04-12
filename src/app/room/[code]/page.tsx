@@ -246,9 +246,333 @@ export default function RoomPage() {
   const myHand = sortHand(state.handsByPlayerId[myPlayerId ?? ''] ?? []);
   const myIdx = state.players.findIndex((p) => p.id === myPlayerId);
 
+  // Action zone — renderuje przyciski CTA dla aktualnej fazy gry
+  const renderActionZone = () => {
+    // Oczekiwanie na start
+    if (state.status === 'waiting') {
+      if (!amHost) return null;
+      return (
+        <>
+          <Button
+            className="h-14 text-lg w-full"
+            disabled={state.players.length < 2}
+            onClick={handleStart}
+          >
+            Rozpocznij grę
+          </Button>
+          {state.players.length < 2 && (
+            <p className="text-sm text-center text-muted-foreground mt-2">
+              Potrzeba co najmniej 2 graczy.
+            </p>
+          )}
+        </>
+      );
+    }
+
+    // Etap 1 — Zbieranie
+    if (state.gamePhase === 'collecting') {
+      const col = state.collecting;
+      if (!col) return null;
+      const isMyTurn = state.players[col.currentPlayerIdx]?.id === myPlayerId;
+      const rainbowAvail = isMyTurn && isRainbowAvailable(myHand);
+      const missing = rainbowAvail ? missingSuit(myHand) : null;
+      const blockGuess = !!state.drinkGate || col.pendingConfirm !== null;
+      const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
+      const pendingMyDrink = myEntry && !myEntry.confirmed;
+      const iWaitForConfirm = col.pendingConfirm === myPlayerId;
+
+      // Priorytet 1: muszę potwierdzić picie
+      if (pendingMyDrink) {
+        return (
+          <Button
+            className="h-14 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+            onClick={handleConfirmDrink}
+          >
+            Wypiłem 🍺 {myEntry!.sips}
+          </Button>
+        );
+      }
+      // Priorytet 2: wypiłem, czekam na innych
+      if (myEntry?.confirmed) {
+        return (
+          <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+            ✓ Wypiłem — czekamy na innych
+          </p>
+        );
+      }
+      // Priorytet 3/5: "Zgadłem!"
+      if (iWaitForConfirm) {
+        return (
+          <button
+            className="h-14 text-xl w-full rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold transition-colors"
+            onClick={handleCollectingConfirm}
+          >
+            ✓ Zgadłem!
+          </button>
+        );
+      }
+      // Czekam aż inni wypiją po tęczy
+      if (col.pendingConfirm === null && state.drinkGate && isMyTurn) {
+        return (
+          <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+            ✓ Zgadłem — czekamy aż wszyscy wypiją
+          </p>
+        );
+      }
+      // Nie moja tura — brak akcji
+      if (!isMyTurn) return null;
+
+      // Moja tura — siatka wyboru + przycisk "Ciągnij kartę"
+      return (
+        <div className="flex flex-col gap-3">
+          {col.round === 1 && (
+            <div className="grid grid-cols-2 gap-3">
+              {(['black', 'red'] as const).map((v) => {
+                const isBlack = v === 'black';
+                const selected = selectedAnswer === v;
+                return (
+                  <button
+                    key={v}
+                    disabled={blockGuess}
+                    className={`h-16 text-lg rounded-md border-2 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                      isBlack
+                        ? `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
+                        : `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
+                    }`}
+                    onClick={() => setSelectedAnswer(v)}
+                  >
+                    {isBlack ? 'Czarna' : 'Czerwona'}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {col.round === 2 && (
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant={selectedAnswer === 'higher' ? 'default' : 'outline'}
+                className="h-16 text-lg"
+                disabled={blockGuess}
+                onClick={() => setSelectedAnswer('higher')}
+              >
+                ▲ Wyżej
+              </Button>
+              <Button
+                variant={selectedAnswer === 'lower' ? 'default' : 'outline'}
+                className="h-16 text-lg"
+                disabled={blockGuess}
+                onClick={() => setSelectedAnswer('lower')}
+              >
+                ▼ Niżej
+              </Button>
+            </div>
+          )}
+          {col.round === 3 && (
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant={selectedAnswer === 'inside' ? 'default' : 'outline'}
+                className="h-16 text-lg"
+                disabled={blockGuess}
+                onClick={() => setSelectedAnswer('inside')}
+              >
+                Pomiędzy
+              </Button>
+              <Button
+                variant={selectedAnswer === 'outside' ? 'default' : 'outline'}
+                className="h-16 text-lg"
+                disabled={blockGuess}
+                onClick={() => setSelectedAnswer('outside')}
+              >
+                Poza
+              </Button>
+            </div>
+          )}
+          {col.round === 4 && (
+            <div className="grid grid-cols-2 gap-3">
+              {(['spades', 'clubs', 'diamonds', 'hearts'] as Suit[]).map((suit) => {
+                const isRainbow = suit === missing;
+                const isRed = suit === 'diamonds' || suit === 'hearts';
+                const selected = selectedAnswer === suit;
+                if (isRainbow) {
+                  return (
+                    <button
+                      key={suit}
+                      disabled={blockGuess}
+                      className={`h-16 text-lg rounded-md border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                      onClick={() => setSelectedAnswer(suit)}
+                    >
+                      {SUIT_LABELS[suit]}
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={suit}
+                    disabled={blockGuess}
+                    className={`h-16 text-lg rounded-md border-2 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                      isRed
+                        ? `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
+                        : `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
+                    }`}
+                    onClick={() => setSelectedAnswer(suit)}
+                  >
+                    {SUIT_LABELS[suit]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <Button
+            className="h-14 text-xl w-full"
+            disabled={!selectedAnswer || blockGuess}
+            onClick={handleCollectingGuess}
+          >
+            Ciągnij kartę
+          </Button>
+        </div>
+      );
+    }
+
+    // Etap 2 — Piramida
+    if (state.gamePhase === 'pyramid' && state.pyramid) {
+      const py = state.pyramid;
+      const myDeal = py.activeDeals[myPlayerId ?? ''];
+      const canAssign = !!myDeal;
+      const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
+      const pendingMyDrink = myEntry && !myEntry.confirmed;
+
+      if (canAssign && myDeal) {
+        const pool = myDeal.remainingSips;
+        const totalPool = myDeal.totalSips;
+        const alreadyGiven = totalPool - pool;
+        return (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium text-center">
+              {alreadyGiven > 0
+                ? `Zostało ${pool} z ${totalPool} kolejek — każ pić:`
+                : `Masz kartę! ${totalPool > 1 ? `Rozdaj ${totalPool} kolejki:` : 'Każ komuś pić:'}`}
+            </p>
+            <div className="flex gap-1 justify-center">
+              {Array.from({ length: totalPool }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'h-2 w-6 rounded-full transition-colors duration-200',
+                    i < alreadyGiven ? 'bg-primary/40' : 'bg-primary',
+                  )}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {state.players.map((p) => (
+                <Button
+                  key={p.id}
+                  variant="outline"
+                  className="h-12"
+                  onClick={() => handlePyramidAssign(p.id, 1)}
+                >
+                  {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}
+                </Button>
+              ))}
+            </div>
+            {pendingMyDrink && (
+              <Button
+                className="h-14 text-xl w-full mt-1 bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleConfirmDrink}
+              >
+                Wypiłem 🍺 {myEntry!.sips}
+              </Button>
+            )}
+            {myEntry?.confirmed && (
+              <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+                ✓ Wypiłem — czekamy na innych
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      if (pendingMyDrink) {
+        return (
+          <Button
+            className="h-14 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+            onClick={handleConfirmDrink}
+          >
+            Wypiłem 🍺 {myEntry!.sips}
+          </Button>
+        );
+      }
+      if (myEntry?.confirmed) {
+        return (
+          <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+            ✓ Wypiłem — czekamy na innych
+          </p>
+        );
+      }
+      if (amHost) {
+        return (
+          <Button
+            className="h-14 text-lg w-full"
+            disabled={!!state.drinkGate || Object.keys(py.activeDeals).length > 0}
+            onClick={handlePyramidNext}
+          >
+            Odsłoń następną kartę
+          </Button>
+        );
+      }
+      return (
+        <p className="h-14 flex items-center justify-center text-center text-muted-foreground">
+          Nie masz pasującej karty.
+        </p>
+      );
+    }
+
+    // Etap 3 — Tramwaj
+    if (state.gamePhase === 'tram' && state.tram) {
+      const tram = state.tram;
+      const isTramPlayer = tram.tramPlayerId === myPlayerId;
+      if (!isTramPlayer) return null;
+      const isFirstCard = tram.referenceCard === null;
+
+      if (state.drinkGate) {
+        return (
+          <Button
+            className="h-16 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+            onClick={handleConfirmDrink}
+          >
+            Jadę dalej
+          </Button>
+        );
+      }
+      if (isFirstCard) {
+        return (
+          <Button
+            className="h-16 text-xl w-full"
+            onClick={() => handleTramGuess('reference')}
+          >
+            Ciągnij kartę
+          </Button>
+        );
+      }
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <Button className="h-16 text-xl" onClick={() => handleTramGuess('higher')}>
+            ▲ Wyżej
+          </Button>
+          <Button className="h-16 text-xl" onClick={() => handleTramGuess('lower')}>
+            ▼ Niżej
+          </Button>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const actionZoneContent = renderActionZone();
 
   return (
-    <main className="w-full min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-32">
+    <main className="w-full min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-[420px]">
       {/* Header */}
       <div className="pt-2">
         <p className="text-xs text-muted-foreground uppercase tracking-widest">Kod pokoju</p>
@@ -319,365 +643,55 @@ export default function RoomPage() {
         })}
       </div>
 
-      {/* DrinkGate — przystanek na picie (tylko tram-restart; collecting i pyramid obsługują slot inline) */}
-
-      {/* Oczekiwanie na start */}
-      {state.status === 'waiting' && (
-        <div className="flex flex-col gap-3 mt-2">
-          {amHost ? (
-            <>
-              <Button
-                className="h-14 text-lg w-full"
-                disabled={state.players.length < 2}
-                onClick={handleStart}
-              >
-                Rozpocznij grę
-              </Button>
-              {state.players.length < 2 && (
-                <p className="text-sm text-center text-muted-foreground">
-                  Potrzeba co najmniej 2 graczy.
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-center text-muted-foreground py-4">
-              Czekamy na hosta…
-            </p>
-          )}
-        </div>
+      {/* Oczekiwanie na start — info (bez przycisków, te są w action zone) */}
+      {state.status === 'waiting' && !amHost && (
+        <p className="text-center text-muted-foreground py-4">
+          Czekamy na hosta…
+        </p>
       )}
 
-      {/* Etap 1 — Zbieranie */}
+      {/* Etap 1 — Zbieranie (tylko info o turze) */}
       {state.gamePhase === 'collecting' && (() => {
         const col = state.collecting;
-        if (!col) return <div className="flex flex-col gap-4 mt-2"><p className="text-center text-muted-foreground py-4">Ładowanie…</p></div>;
+        if (!col) return <p className="text-center text-muted-foreground py-4">Ładowanie…</p>;
         const isMyTurn = state.players[col.currentPlayerIdx]?.id === myPlayerId;
         const currentPlayer = state.players[col.currentPlayerIdx];
-        const rainbowAvail = isMyTurn && isRainbowAvailable(myHand);
-        const missing = rainbowAvail ? missingSuit(myHand) : null;
-        const blockGuess = !!state.drinkGate || col.pendingConfirm !== null;
 
+        if (!isMyTurn) {
+          return (
+            <p className="text-center text-xl py-4">
+              Tura: <strong>{currentPlayer?.nick ?? '...'}</strong>
+            </p>
+          );
+        }
         return (
-          <div className="flex flex-col gap-4 mt-2">
-            {!isMyTurn ? (
-              <p className="text-center text-xl py-4">
-                Tura: <strong>{currentPlayer?.nick ?? '...'}</strong>
-              </p>
-            ) : (
-              <>
-                <p className="text-center text-sm text-muted-foreground font-medium">Twoja tura! Wybierz odpowiedź:</p>
-
-                {/* Runda 1: kolor */}
-                {col.round === 1 && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {(['black', 'red'] as const).map((v) => {
-                      const isBlack = v === 'black';
-                      const selected = selectedAnswer === v;
-                      return (
-                        <button
-                          key={v}
-                          disabled={blockGuess}
-                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                            isBlack
-                              ? `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
-                              : `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
-                          }`}
-                          onClick={() => setSelectedAnswer(v)}
-                        >
-                          {isBlack ? 'Czarna' : 'Czerwona'}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Runda 2: wyżej/niżej */}
-                {col.round === 2 && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      variant={selectedAnswer === 'higher' ? 'default' : 'outline'}
-                      className="h-16 text-lg"
-                      disabled={blockGuess}
-                      onClick={() => setSelectedAnswer('higher')}
-                    >
-                      ▲ Wyżej
-                    </Button>
-                    <Button
-                      variant={selectedAnswer === 'lower' ? 'default' : 'outline'}
-                      className="h-16 text-lg"
-                      disabled={blockGuess}
-                      onClick={() => setSelectedAnswer('lower')}
-                    >
-                      ▼ Niżej
-                    </Button>
-                  </div>
-                )}
-
-                {/* Runda 3: pomiędzy/poza */}
-                {col.round === 3 && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      variant={selectedAnswer === 'inside' ? 'default' : 'outline'}
-                      className="h-16 text-lg"
-                      disabled={blockGuess}
-                      onClick={() => setSelectedAnswer('inside')}
-                    >
-                      Pomiędzy
-                    </Button>
-                    <Button
-                      variant={selectedAnswer === 'outside' ? 'default' : 'outline'}
-                      className="h-16 text-lg"
-                      disabled={blockGuess}
-                      onClick={() => setSelectedAnswer('outside')}
-                    >
-                      Poza
-                    </Button>
-                  </div>
-                )}
-
-                {/* Runda 4: symbol */}
-                {col.round === 4 && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {(['spades', 'clubs', 'diamonds', 'hearts'] as Suit[]).map((suit) => {
-                      const isRainbow = suit === missing;
-                      const isRed = suit === 'diamonds' || suit === 'hearts';
-                      const selected = selectedAnswer === suit;
-                      if (isRainbow) {
-                        return (
-                          <button
-                            key={suit}
-                            disabled={blockGuess}
-                            className={`h-16 text-lg rounded-md border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
-                            onClick={() => setSelectedAnswer(suit)}
-                          >
-                            {SUIT_LABELS[suit]}
-                          </button>
-                        );
-                      }
-                      return (
-                        <button
-                          key={suit}
-                          disabled={blockGuess}
-                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                            isRed
-                              ? `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
-                              : `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
-                          }`}
-                          onClick={() => setSelectedAnswer(suit)}
-                        >
-                          {SUIT_LABELS[suit]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* CTA slot — widoczny niezależnie od isMyTurn */}
-            {(() => {
-              const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
-              const pendingMyDrink = myEntry && !myEntry.confirmed;
-              const iWaitForConfirm = col.pendingConfirm === myPlayerId;
-
-              // Priorytet 1: muszę potwierdzić picie
-              if (pendingMyDrink) {
-                return (
-                  <Button
-                    className="h-14 text-xl w-full mt-2 bg-amber-500 hover:bg-amber-600 text-white"
-                    onClick={handleConfirmDrink}
-                  >
-                    Wypiłem 🍺 {myEntry!.sips}
-                  </Button>
-                );
-              }
-
-              // Priorytet 2: potwierdziłem picie, czekam na innych
-              if (myEntry?.confirmed) {
-                return (
-                  <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium mt-2">
-                    ✓ Wypiłem — czekamy na innych
-                  </p>
-                );
-              }
-
-              // Priorytet 3: muszę kliknąć "Zgadłem!" + drinkGate wciąż aktywny (tęcza)
-              if (iWaitForConfirm && state.drinkGate) {
-                return (
-                  <button
-                    className="h-14 text-xl w-full mt-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold transition-colors"
-                    onClick={handleCollectingConfirm}
-                  >
-                    ✓ Zgadłem! (czekamy aż wszyscy wypiją)
-                  </button>
-                );
-              }
-
-              // Priorytet 4: kliknąłem "Zgadłem!" wcześniej, czekam aż inni wypiją
-              if (!iWaitForConfirm && col.pendingConfirm === null && state.drinkGate && isMyTurn) {
-                return (
-                  <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium mt-2">
-                    ✓ Zgadłem — czekamy aż wszyscy wypiją
-                  </p>
-                );
-              }
-
-              // Priorytet 5: muszę kliknąć "Zgadłem!" (bez drinkGate — zwykłe trafienie)
-              if (iWaitForConfirm) {
-                return (
-                  <button
-                    className="h-14 text-xl w-full mt-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold transition-colors"
-                    onClick={handleCollectingConfirm}
-                  >
-                    ✓ Zgadłem!
-                  </button>
-                );
-              }
-
-              if (!isMyTurn) return null;
-              return (
-                <Button
-                  className="h-14 text-xl w-full mt-2"
-                  disabled={!selectedAnswer || blockGuess}
-                  onClick={handleCollectingGuess}
-                >
-                  Ciągnij kartę
-                </Button>
-              );
-            })()}
-          </div>
+          <p className="text-center text-sm text-muted-foreground font-medium pt-2">
+            Twoja tura! Wybierz odpowiedź:
+          </p>
         );
       })()}
 
-      {/* Etap 2 — Piramida */}
+      {/* Etap 2 — Piramida (tylko odkryta karta) */}
       {state.gamePhase === 'pyramid' && state.pyramid && (() => {
-        const py = state.pyramid;
-        const currentCard = py.currentCard;
-        // Gracz może rozdawać jeśli ma aktywny deal (kartę odłożono przy odsłonięciu)
-        const myDeal = py.activeDeals[myPlayerId ?? ''];
-        const canAssign = !!myDeal;
-        // Wszyscy gracze (self-assign dozwolony)
-        const allPlayers = state.players;
-
-        return (
-          <div className="flex flex-col gap-4 mt-2">
-            {currentCard ? (
-              <>
-                <div className="flex flex-col items-center gap-2">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest">Odkryta karta</p>
-                  <Card card={currentCard} size="lg" />
-                </div>
-
-                {/* Slot CTA: grid rozdawania kolejek (gdy canAssign) lub brak akcji */}
-                {(() => {
-                  const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
-                  const pendingMyDrink = myEntry && !myEntry.confirmed;
-
-                  if (canAssign && myDeal) {
-                    const pool = myDeal.remainingSips;
-                    const totalPool = myDeal.totalSips;
-                    const alreadyGiven = totalPool - pool;
-                    return (
-                      <div className="flex flex-col gap-2">
-                        <p className="text-sm font-medium text-center">
-                          {alreadyGiven > 0
-                            ? `Zostało ${pool} z ${totalPool} kolejek — każ pić:`
-                            : `Masz kartę! ${totalPool > 1 ? `Rozdaj ${totalPool} kolejki:` : 'Każ komuś pić:'}`}
-                        </p>
-                        <div className="flex gap-1 justify-center">
-                          {Array.from({ length: totalPool }).map((_, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                'h-2 w-6 rounded-full transition-colors duration-200',
-                                i < alreadyGiven ? 'bg-primary/40' : 'bg-primary',
-                              )}
-                            />
-                          ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {allPlayers.map((p) => (
-                            <Button
-                              key={p.id}
-                              variant="outline"
-                              className="h-12"
-                              onClick={() => handlePyramidAssign(p.id, 1)}
-                            >
-                              {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}
-                            </Button>
-                          ))}
-                        </div>
-                        {pendingMyDrink && (
-                          <Button
-                            className="h-14 text-xl w-full mt-1 bg-amber-500 hover:bg-amber-600 text-white"
-                            onClick={handleConfirmDrink}
-                          >
-                            Wypiłem 🍺 {myEntry!.sips}
-                          </Button>
-                        )}
-                        {myEntry?.confirmed && (
-                          <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
-                            ✓ Wypiłem — czekamy na innych
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (pendingMyDrink) {
-                    return (
-                      <Button
-                        className="h-14 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
-                        onClick={handleConfirmDrink}
-                      >
-                        Wypiłem 🍺 {myEntry!.sips}
-                      </Button>
-                    );
-                  }
-
-                  if (myEntry?.confirmed) {
-                    return (
-                      <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
-                        ✓ Wypiłem — czekamy na innych
-                      </p>
-                    );
-                  }
-
-                  return (
-                    <p className="h-14 flex items-center justify-center text-center text-muted-foreground">
-                      Nie masz pasującej karty.
-                    </p>
-                  );
-                })()}
-              </>
-            ) : (
-              <p className="text-center text-muted-foreground py-4">
-                Czekaj na odsłonięcie karty piramidy…
-              </p>
-            )}
-
-            {amHost && (
-              <Button
-                className="h-14 text-lg w-full mt-2"
-                disabled={!!state.drinkGate || Object.keys(py.activeDeals).length > 0}
-                onClick={handlePyramidNext}
-              >
-                Odsłoń następną kartę
-              </Button>
-            )}
-
+        const currentCard = state.pyramid.currentCard;
+        return currentCard ? (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest">Odkryta karta</p>
+            <Card card={currentCard} size="lg" />
           </div>
+        ) : (
+          <p className="text-center text-muted-foreground py-4">
+            Czekaj na odsłonięcie karty piramidy…
+          </p>
         );
       })()}
 
-      {/* Etap 3 — Tramwaj */}
+      {/* Etap 3 — Tramwaj (info kto jedzie) */}
       {(state.gamePhase === 'tram' || (state.status === 'ended' && state.tram)) && state.tram && (() => {
         const tram = state.tram;
         const isTramPlayer = tram.tramPlayerId === myPlayerId;
         const tramPlayer = state.players.find((p) => p.id === tram.tramPlayerId);
-        const isFirstCard = tram.referenceCard === null;
         const isEnded = state.status === 'ended';
-        // Pełna sekwencja: slot 0 = referenceCard, sloty 1-4 = streakCards
         const allCards: (typeof tram.referenceCard)[] = [
           tram.referenceCard,
           ...tram.streakCards,
@@ -685,7 +699,7 @@ export default function RoomPage() {
 
         return (
           <div className="flex flex-col gap-4 mt-2">
-            {/* Streak jako karty — slot 0 = referencyjna */}
+            {/* Streak jako karty */}
             <div className="flex flex-col items-center gap-2">
               <p className="text-xs text-muted-foreground uppercase tracking-widest">Tramwaj</p>
               <div className="flex items-end justify-center gap-1">
@@ -720,52 +734,15 @@ export default function RoomPage() {
                 <p className="text-muted-foreground text-center text-sm">
                   Sprawdźcie kto pije ile łyków powyżej.
                 </p>
-                <Button
-                  variant="secondary"
-                  className="h-12 w-full"
-                  onClick={handleLeave}
-                >
+                <Button variant="secondary" className="h-12 w-full" onClick={handleLeave}>
                   Opuść pokój
                 </Button>
               </div>
-            ) : isTramPlayer ? (
-              <>
-                {state.drinkGate ? (
-                  <Button
-                    className="h-16 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
-                    onClick={handleConfirmDrink}
-                  >
-                    Jadę dalej
-                  </Button>
-                ) : isFirstCard ? (
-                  <Button
-                    className="h-16 text-xl w-full"
-                    onClick={() => handleTramGuess('reference')}
-                  >
-                    Ciągnij kartę
-                  </Button>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      className="h-16 text-xl"
-                      onClick={() => handleTramGuess('higher')}
-                    >
-                      ▲ Wyżej
-                    </Button>
-                    <Button
-                      className="h-16 text-xl"
-                      onClick={() => handleTramGuess('lower')}
-                    >
-                      ▼ Niżej
-                    </Button>
-                  </div>
-                )}
-              </>
-            ) : (
+            ) : !isTramPlayer ? (
               <p className="text-center text-muted-foreground py-4">
                 <strong>{tramPlayer?.nick ?? '...'}</strong> jedzie tramwajem.
               </p>
-            )}
+            ) : null}
           </div>
         );
       })()}
@@ -775,6 +752,15 @@ export default function RoomPage() {
 
       {/* Dummy — nie usuwaj, żeby myIdx nie był "unused" */}
       {myIdx === -1 && null}
+
+      {/* Fixed action zone — przyklejona do dolnej krawędzi, ponad wachlarzem kart */}
+      {actionZoneContent && (
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 w-full max-w-md z-[25] px-4">
+          <div className="bg-background/95 backdrop-blur-sm border-t border-border/60 pt-3 pb-2">
+            {actionZoneContent}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
