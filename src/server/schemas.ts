@@ -52,6 +52,10 @@ export const confirmDrinkSchema = z.object({}).strict();
 
 export const collectingConfirmSchema = z.object({}).strict();
 
+export const roomReorderPlayersSchema = z.object({
+  playerIds: z.array(z.string()).min(2).max(12),
+});
+
 export function validate<T>(
   schema: z.ZodSchema<T>,
   payload: unknown,

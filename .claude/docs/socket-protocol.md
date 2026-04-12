@@ -73,6 +73,19 @@ Widok stołu (`/table/[code]`) subskrybuje pokój tylko do odczytu (bez gracza).
 
 ---
 
+### `room:reorderPlayers`
+
+Zmienia kolejność graczy w lobby. Tylko host, tylko gdy `status === 'waiting'`. Kolejność tablicy `players[]` ma znaczenie — `players[0]` zaczyna grę.
+
+**Payload:**
+```typescript
+{ playerIds: string[] }  // pełna tablica ID w nowej kolejności
+```
+
+**Walidacja:** host-only, status=waiting, identyczny zbiór ID (żaden gracz nie może być pominięty ani dodany), min 2, max 12.
+
+---
+
 ### `game:start`
 
 Uruchamia grę. Tylko host może wysłać.

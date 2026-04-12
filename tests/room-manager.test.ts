@@ -130,6 +130,52 @@ describe('RoomManager', () => {
     });
   });
 
+  describe('reorderPlayers', () => {
+    it('zmienia kolejność graczy', () => {
+      const { state, playerId: hostId } = rooms.createRoom('Alice');
+      const { playerId: bobId } = rooms.joinRoom(state.code, 'Bob');
+      const { playerId: carolId } = rooms.joinRoom(state.code, 'Carol');
+      const newOrder = [carolId, hostId, bobId];
+      const updated = rooms.reorderPlayers(state.code, hostId, newOrder);
+      expect(updated.players.map((p) => p.id)).toEqual(newOrder);
+    });
+
+    it('rzuca not_host gdy nie-host próbuje reorderować', () => {
+      const { state } = rooms.createRoom('Alice');
+      const { playerId: bobId } = rooms.joinRoom(state.code, 'Bob');
+      expect(() =>
+        rooms.reorderPlayers(state.code, bobId, [state.players[0].id, bobId]),
+      ).toThrow('not_host');
+    });
+
+    it('rzuca game_already_started gdy gra trwa', () => {
+      const { state, playerId: hostId } = rooms.createRoom('Alice');
+      const { playerId: bobId } = rooms.joinRoom(state.code, 'Bob');
+      const room = rooms.getRoom(state.code)!;
+      rooms.updateRoom(state.code, { ...room, status: 'playing' });
+      expect(() =>
+        rooms.reorderPlayers(state.code, hostId, [hostId, bobId]),
+      ).toThrow('game_already_started');
+    });
+
+    it('rzuca invalid_player_ids gdy brakuje gracza', () => {
+      const { state, playerId: hostId } = rooms.createRoom('Alice');
+      rooms.joinRoom(state.code, 'Bob');
+      expect(() =>
+        rooms.reorderPlayers(state.code, hostId, [hostId]),
+      ).toThrow('invalid_player_ids');
+    });
+
+    it('rzuca invalid_player_ids gdy ID nie należy do pokoju', () => {
+      const { state, playerId: hostId } = rooms.createRoom('Alice');
+      const { playerId: bobId } = rooms.joinRoom(state.code, 'Bob');
+      expect(() =>
+        rooms.reorderPlayers(state.code, hostId, [hostId, '00000000-0000-0000-0000-000000000000']),
+      ).toThrow('invalid_player_ids');
+      void bobId;
+    });
+  });
+
   describe('cleanupStale', () => {
     it('usuwa pokoje starsze niż 2h', () => {
       const { state } = rooms.createRoom('Alice');

@@ -21,6 +21,7 @@ import {
   pyramidNextSchema,
   tramGuessSchema,
   confirmDrinkSchema,
+  roomReorderPlayersSchema,
   validate,
 } from '@/server/schemas';
 import type { AppServer, AppSocket } from '@/shared/socket-events';
@@ -112,6 +113,20 @@ export function registerSocketHandlers(
       socket.join(data.code);
       cb({ ok: true, data: null });
       socket.emit('room:state', toPublicRoomState(room));
+    });
+
+    socket.on('room:reorderPlayers', (payload, cb) => {
+      const data = validate(roomReorderPlayersSchema, payload, cb);
+      if (!data) return;
+      const { playerId, roomCode } = socket.data;
+      if (!playerId || !roomCode) return cb({ ok: false, error: 'not_in_room' });
+      try {
+        const newState = rooms.reorderPlayers(roomCode, playerId, data.playerIds);
+        io.to(roomCode).emit('room:state', toPublicRoomState(newState));
+        cb({ ok: true, data: null });
+      } catch (e) {
+        cb({ ok: false, error: (e as Error).message });
+      }
     });
 
     socket.on('game:start', (_payload, cb) => {

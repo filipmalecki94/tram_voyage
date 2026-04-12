@@ -8,7 +8,24 @@ import { HandFan } from '@/components/HandFan';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
 import { getSocket } from '@/lib/socket-client';
 import { cn } from '@/lib/utils';
-import type { Card as CardType, Suit } from '@/shared/types';
+import type { Card as CardType, Suit, PublicPlayer } from '@/shared/types';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 
 const RANK_ORDER = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K', 'A'] as const;
 
@@ -37,6 +54,53 @@ const SUIT_LABELS: Record<Suit, string> = {
   hearts: '♥ Kier',
 };
 
+function SortablePlayerItem({
+  player,
+  isMe,
+  isHost,
+}: {
+  player: PublicPlayer;
+  isMe: boolean;
+  isHost: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: player.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded-lg px-3 py-2 bg-muted touch-none"
+    >
+      <button
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground"
+        {...attributes}
+        {...listeners}
+        aria-label="Przeciągnij aby zmienić kolejność"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <span
+        className={`w-2 h-2 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
+      />
+      <span
+        className={cn(
+          'flex-1 font-medium truncate',
+          isHost && 'text-yellow-500',
+          isMe && 'underline',
+        )}
+      >
+        {player.nick}
+      </span>
+    </div>
+  );
+}
+
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
   const code = params.code.toUpperCase();
@@ -49,6 +113,12 @@ export default function RoomPage() {
   const [joinNick, setJoinNick] = useState('');
   const [joining, setJoining] = useState(false);
   const [reconnecting, setReconnecting] = useState(true);
+  const [localPlayerOrder, setLocalPlayerOrder] = useState<string[] | null>(null);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
 
   // Dla Etapu 1 — wybrana odpowiedź przed zatwierdzeniem
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -190,6 +260,24 @@ export default function RoomPage() {
     const res = await emit('game:confirmDrink', {});
     if (!res.ok) toast.error(res.error);
   }, [emit]);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    if (!state) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const players = state.players;
+    const oldIndex = players.findIndex((p) => p.id === active.id);
+    const newIndex = players.findIndex((p) => p.id === over.id);
+    const newOrder = arrayMove(players, oldIndex, newIndex).map((p) => p.id);
+    setLocalPlayerOrder(newOrder);
+    const res = await emit('room:reorderPlayers', { playerIds: newOrder });
+    if (!res.ok) {
+      setLocalPlayerOrder(null);
+      toast.error('Nie udało się zmienić kolejności');
+    } else {
+      setLocalPlayerOrder(null);
+    }
+  }, [state, emit]);
 
   // --- Rendering ---
 
@@ -594,53 +682,78 @@ export default function RoomPage() {
 
       {/* Lista graczy */}
       <div className="flex flex-col gap-1">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gracze</p>
-        {state.players.map((player) => {
-          const isCurrentTurn =
-            state.status === 'playing' &&
-            (state.collecting
-              ? state.players[state.collecting.currentPlayerIdx]?.id === player.id
-              : state.currentPlayerId === player.id);
-          const isMe = player.id === myPlayerId;
-          const isHost = player.id === state.hostPlayerId;
-          const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
-          const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
-          const inGame = state.status === 'ended' || state.gamePhase !== null;
-          return (
-            <div
-              key={player.id}
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 ${isCurrentTurn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Gracze{amHost && state.status === 'waiting' && (
+            <span className="ml-2 normal-case text-muted-foreground/60 font-normal">— przeciągnij aby zmienić kolejność</span>
+          )}
+        </p>
+        {amHost && state.status === 'waiting' ? (
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext
+              items={(localPlayerOrder ?? state.players.map((p) => p.id))}
+              strategy={verticalListSortingStrategy}
             >
-              <span
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
-              />
-              <span
-                className={cn(
-                  'flex-1 font-medium truncate',
-                  isHost && !isCurrentTurn && 'text-yellow-500',
-                  isHost && isCurrentTurn && 'text-yellow-300',
-                  isMe && 'underline',
-                )}
+              {(localPlayerOrder
+                ? localPlayerOrder.map((id) => state.players.find((p) => p.id === id)!)
+                : state.players
+              ).map((player) => (
+                <SortablePlayerItem
+                  key={player.id}
+                  player={player}
+                  isMe={player.id === myPlayerId}
+                  isHost={player.id === state.hostPlayerId}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          state.players.map((player) => {
+            const isCurrentTurn =
+              state.status === 'playing' &&
+              (state.collecting
+                ? state.players[state.collecting.currentPlayerIdx]?.id === player.id
+                : state.currentPlayerId === player.id);
+            const isMe = player.id === myPlayerId;
+            const isHost = player.id === state.hostPlayerId;
+            const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
+            const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
+            const inGame = state.status === 'ended' || state.gamePhase !== null;
+            return (
+              <div
+                key={player.id}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 ${isCurrentTurn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
               >
-                {player.nick}
-              </span>
-              {/* Prawa strona — stała szerokość: badge (invisible gdy 0) + licznik */}
-              {inGame && (
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <span
-                    className={cn(
-                      'text-xs px-1.5 py-0.5 rounded font-semibold tabular-nums',
-                      pendingSips > 0 ? 'bg-amber-500 text-white' : 'invisible',
-                    )}
-                  >
-                    +{pendingSips}
-                  </span>
-                  <span className="text-xs tabular-nums w-9 text-right">🍺 {player.sips}</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                <span
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
+                />
+                <span
+                  className={cn(
+                    'flex-1 font-medium truncate',
+                    isHost && !isCurrentTurn && 'text-yellow-500',
+                    isHost && isCurrentTurn && 'text-yellow-300',
+                    isMe && 'underline',
+                  )}
+                >
+                  {player.nick}
+                </span>
+                {/* Prawa strona — stała szerokość: badge (invisible gdy 0) + licznik */}
+                {inGame && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span
+                      className={cn(
+                        'text-xs px-1.5 py-0.5 rounded font-semibold tabular-nums',
+                        pendingSips > 0 ? 'bg-amber-500 text-white' : 'invisible',
+                      )}
+                    >
+                      +{pendingSips}
+                    </span>
+                    <span className="text-xs tabular-nums w-9 text-right">🍺 {player.sips}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Oczekiwanie na start — info (bez przycisków, te są w action zone) */}

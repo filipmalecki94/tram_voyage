@@ -159,6 +159,22 @@ export class RoomManager {
     return newState;
   }
 
+  reorderPlayers(code: string, requesterId: string, playerIds: string[]): RoomState {
+    const room = this.rooms.get(code);
+    if (!room) throw new Error('no_room');
+    if (room.status !== 'waiting') throw new Error('game_already_started');
+    if (requesterId !== room.hostId) throw new Error('not_host');
+    if (playerIds.length !== room.players.length) throw new Error('invalid_player_ids');
+    const existingIds = new Set(room.players.map((p) => p.id));
+    if (!playerIds.every((id) => existingIds.has(id))) throw new Error('invalid_player_ids');
+
+    const newPlayers = playerIds.map((id) => room.players.find((p) => p.id === id)!);
+    const newState: RoomState = { ...room, players: newPlayers };
+    this.rooms.set(code, newState);
+    this.meta.set(code, { ...this.meta.get(code)!, lastActivityAt: Date.now() });
+    return newState;
+  }
+
   getRoom(code: string): RoomState | undefined {
     return this.rooms.get(code);
   }
