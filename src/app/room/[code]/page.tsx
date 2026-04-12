@@ -65,7 +65,6 @@ function SortablePlayerItem({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: player.id,
-    disabled: isHost,
   });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -78,18 +77,14 @@ function SortablePlayerItem({
       style={style}
       className="flex items-center gap-2 rounded-lg px-3 py-2 bg-muted touch-none"
     >
-      {isHost ? (
-        <span className="w-4 h-4 flex-shrink-0" />
-      ) : (
-        <button
-          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground"
-          {...attributes}
-          {...listeners}
-          aria-label="Przeciągnij aby zmienić kolejność"
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
-      )}
+      <button
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground"
+        {...attributes}
+        {...listeners}
+        aria-label="Przeciągnij aby zmienić kolejność"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
       <span
         className={`w-2 h-2 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
       />
@@ -273,8 +268,6 @@ export default function RoomPage() {
     const players = state.players;
     const oldIndex = players.findIndex((p) => p.id === active.id);
     const newIndex = players.findIndex((p) => p.id === over.id);
-    // Host zawsze zostaje na pozycji 0
-    if (newIndex === 0) return;
     const newOrder = arrayMove(players, oldIndex, newIndex).map((p) => p.id);
     setLocalPlayerOrder(newOrder);
     const res = await emit('room:reorderPlayers', { playerIds: newOrder });

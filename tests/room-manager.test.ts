@@ -131,22 +131,14 @@ describe('RoomManager', () => {
   });
 
   describe('reorderPlayers', () => {
-    it('zmienia kolejność graczy (host zostaje pierwszy)', () => {
+    it('zmienia kolejność graczy, hostId nie zmienia się', () => {
       const { state, playerId: hostId } = rooms.createRoom('Alice');
       const { playerId: bobId } = rooms.joinRoom(state.code, 'Bob');
       const { playerId: carolId } = rooms.joinRoom(state.code, 'Carol');
-      const newOrder = [hostId, carolId, bobId];
+      const newOrder = [carolId, hostId, bobId];
       const updated = rooms.reorderPlayers(state.code, hostId, newOrder);
       expect(updated.players.map((p) => p.id)).toEqual(newOrder);
       expect(updated.hostId).toBe(hostId);
-    });
-
-    it('rzuca host_must_be_first gdy host nie jest na pozycji 0', () => {
-      const { state, playerId: hostId } = rooms.createRoom('Alice');
-      const { playerId: bobId } = rooms.joinRoom(state.code, 'Bob');
-      expect(() =>
-        rooms.reorderPlayers(state.code, hostId, [bobId, hostId]),
-      ).toThrow('host_must_be_first');
     });
 
     it('rzuca not_host gdy nie-host próbuje reorderować', () => {
