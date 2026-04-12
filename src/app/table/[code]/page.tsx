@@ -319,13 +319,18 @@ export default function TablePage() {
                 <div className="grid grid-cols-5 gap-2 w-full">
                   {(() => {
                     const allCards = [state.tram!.referenceCard, ...state.tram!.streakCards];
+                    const failedCard = state.drinkGate?.resumeAction === 'tram-restart' ? state.tram!.lastCard : null;
+                    const failedSlot = failedCard ? allCards.length : -1;
                     return [0, 1, 2, 3, 4].map((i) => {
                       const card = allCards[i];
+                      const isFailed = i === failedSlot;
                       return (
-                        <div key={i} className="aspect-[5/7] w-full">
+                        <div key={i} className={`aspect-[5/7] w-full${isFailed ? ' ring-2 ring-red-500 rounded-xl' : ''}`}>
                           {card
                             ? <Card card={card} size="fill" />
-                            : <Card faceDown size="fill" />}
+                            : isFailed && failedCard
+                              ? <Card card={failedCard} size="fill" />
+                              : <Card faceDown size="fill" />}
                         </div>
                       );
                     });

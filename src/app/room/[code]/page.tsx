@@ -706,12 +706,21 @@ export default function RoomPage() {
             <div className="flex flex-col items-center gap-2">
               <p className="text-xs text-muted-foreground uppercase tracking-widest">Tramwaj</p>
               <div className="flex items-end justify-center gap-1">
-                {[0, 1, 2, 3, 4].map((i) => {
-                  const card = allCards[i];
-                  return card
-                    ? <Card key={i} card={card} size="sm" />
-                    : <Card key={i} faceDown size="sm" />;
-                })}
+                {(() => {
+                  const failedCard = state.drinkGate?.resumeAction === 'tram-restart' ? tram.lastCard : null;
+                  const failedSlot = failedCard ? allCards.length : -1;
+                  return [0, 1, 2, 3, 4].map((i) => {
+                    const card = allCards[i];
+                    const isFailed = i === failedSlot;
+                    if (card) return <Card key={i} card={card} size="sm" />;
+                    if (isFailed && failedCard) return (
+                      <div key={i} className="ring-2 ring-red-500 rounded-lg">
+                        <Card card={failedCard} size="sm" />
+                      </div>
+                    );
+                    return <Card key={i} faceDown size="sm" />;
+                  });
+                })()}
               </div>
             </div>
 
