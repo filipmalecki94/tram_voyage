@@ -29,7 +29,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <span className="fixed top-2 right-2 z-50 text-[10px] text-muted-foreground/50 font-mono select-none pointer-events-none">
+        <span className="fixed bottom-2 right-2 z-50 text-[10px] text-muted-foreground/50 font-mono select-none pointer-events-none">
           v0.1.2
         </span>
         {children}

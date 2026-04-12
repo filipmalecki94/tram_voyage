@@ -67,6 +67,7 @@ export interface PublicPyramidSubState {
 
 export interface TramSubState {
   deck: Card[];
+  referenceCard: Card | null;
   lastCard: Card | null;
   streak: number;
   tramPlayerId: string;
@@ -75,6 +76,7 @@ export interface TramSubState {
 
 export interface PublicTramSubState {
   tramDeckLeft: number;
+  referenceCard: Card | null;
   lastCard: Card | null;
   streak: number;
   tramPlayerId: string;
@@ -168,6 +170,7 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
   if (s.tram) {
     publicTram = {
       tramDeckLeft: s.tram.deck.length,
+      referenceCard: s.tram.referenceCard,
       lastCard: s.tram.lastCard,
       streak: s.tram.streak,
       tramPlayerId: s.tram.tramPlayerId,

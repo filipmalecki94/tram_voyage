@@ -563,6 +563,7 @@ export function enterTram(state: GameState, tramPlayerId: string, rng: RNG): Gam
   const newDeck = shuffle(createDeck(), rng);
   const tram: TramSubState = {
     deck: newDeck,
+    referenceCard: null,
     lastCard: null,
     streak: 0,
     tramPlayerId,
@@ -592,6 +593,7 @@ export function restartTramStreak(state: GameState): GameState {
     ...state,
     tram: {
       ...state.tram,
+      referenceCard: null,
       lastCard: null,
       streak: 0,
       streakCards: [],
@@ -638,6 +640,7 @@ export function tramGuess(
     const newTram: TramSubState = {
       ...state.tram,
       deck: remainingDeck,
+      referenceCard: card,
       lastCard: card,
       streak: 0,
     };
@@ -658,7 +661,7 @@ export function tramGuess(
   if (correct) {
     const newStreak = state.tram.streak + 1;
     const newStreakCards = [...state.tram.streakCards, card];
-    if (newStreak >= 5) {
+    if (newStreak >= 4) {
       // Sukces!
       const newState: GameState = {
         ...state,

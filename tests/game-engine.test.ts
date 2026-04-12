@@ -802,7 +802,7 @@ describe('tramGuess', () => {
     expect(r3.state.drinkGate!.resumeAction).toBe('tram-restart');
   });
 
-  it('streakCards ma 5 elementów po wygranej', () => {
+  it('streakCards ma 4 elementy po wygranej', () => {
     let state = tramState();
     const r0 = tramGuess(state, 'p1', 'reference', seededRng(1));
     state = r0.state;
@@ -812,20 +812,19 @@ describe('tramGuess', () => {
       { rank: 5, suit: 'hearts' },
       { rank: 7, suit: 'clubs' },
       { rank: 9, suit: 'diamonds' },
-      { rank: 'J', suit: 'spades' },
     ];
     state = {
       ...state,
       tram: { ...state.tram!, lastCard: { rank: 2, suit: 'spades' }, deck: cards, streak: 0 },
     };
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       const r = tramGuess(state, 'p1', 'higher', seededRng(i));
       state = r.state;
     }
 
     expect(state.gamePhase).toBe('ended');
-    expect(state.tram!.streakCards).toHaveLength(5);
+    expect(state.tram!.streakCards).toHaveLength(4);
   });
 
   it('re-tasuje deck gdy pula wyczerpana', () => {

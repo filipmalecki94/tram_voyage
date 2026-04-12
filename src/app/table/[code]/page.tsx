@@ -124,60 +124,49 @@ export default function TablePage() {
   })();
 
   return (
-    <main className="h-screen bg-neutral-950 text-white flex flex-col lg:flex-row gap-0 overflow-hidden">
-      {/* Lewa kolumna — QR + kod */}
-      <aside className="lg:w-80 flex flex-col items-center justify-center p-8 gap-6 border-b lg:border-b-0 lg:border-r border-neutral-800 shrink-0">
-        {joinUrl ? (
-          <QrPoster code={code} joinUrl={joinUrl} />
-        ) : (
-          <div className="w-64 h-64 bg-neutral-800 rounded-2xl animate-pulse" />
-        )}
-        <a
-          href="/"
-          className="text-sm text-neutral-500 hover:text-neutral-300 transition-colors underline"
-        >
-          Nowy pokój
-        </a>
-      </aside>
+    <main className="h-screen bg-neutral-950 text-white flex flex-col gap-0 overflow-hidden relative">
+      {/* Przycisk nawigacyjny */}
+      <a
+        href="/table"
+        className="absolute top-4 right-4 z-10 rounded-lg bg-neutral-800 hover:bg-neutral-700 px-3 py-2 text-sm text-neutral-200 transition-colors"
+      >
+        zmień stół
+      </a>
 
-      {/* Prawa kolumna — gra */}
+      {/* Główna sekcja — gra */}
       <section className="flex-1 flex flex-col p-8 gap-8 overflow-hidden min-h-0">
         {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight">Tramwajarz</h1>
-          <p className="text-neutral-400 mt-1">{state === null ? 'Łączenie…' : phaseLabel}</p>
+        <div className="text-center">
+          <p className="text-neutral-400">{state === null ? 'Łączenie…' : phaseLabel}</p>
         </div>
 
         {/* Lista graczy — tylko poza Etapem 1 (tam jest w lewym panelu split-layoutu) */}
-        {state && state.players.length > 0 && state.gamePhase !== 'collecting' && (
+        {state && state.players.length > 0 && state.gamePhase !== 'collecting' && state.gamePhase !== 'tram' && state.status !== 'ended' && (
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest mb-3">
-              Gracze
-            </p>
             <div className="flex flex-wrap gap-3">
               {state.players.map((player) => {
                 const isActive = state.status === 'playing' && player.id === currentPlayerId;
                 const colorClass = AVATAR_COLORS[hashNick(player.nick) % AVATAR_COLORS.length];
                 const initial = player.nick.charAt(0).toUpperCase();
-                const isTramPlayer =
-                  state.gamePhase === 'tram' && state.tram?.tramPlayerId === player.id;
+                const hasActiveDeal = state.gamePhase === 'pyramid' &&
+                  !!state.pyramid?.activeDeals[player.id];
+                const isHighlighted = state.gamePhase === 'pyramid' ? hasActiveDeal : isActive;
                 return (
                   <div
                     key={player.id}
                     className={`flex flex-col gap-1 rounded-xl px-3 py-2 transition-all duration-300 ${
-                      isActive
+                      isHighlighted
                         ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10'
                         : 'bg-neutral-800 text-white'
                     } ${!player.isConnected ? 'opacity-40' : ''}`}
                   >
                     <div className="flex items-center gap-2">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isActive ? 'bg-neutral-900' : colorClass}`}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isHighlighted ? 'bg-neutral-900' : colorClass}`}
                       >
                         {initial}
                       </div>
                       <span className="font-medium text-sm">{player.nick}</span>
-                      {isTramPlayer && <span className="text-xs ml-1">🚋</span>}
                       {(state.status === 'ended' || state.gamePhase !== null) && (
                         <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
                       )}
@@ -189,15 +178,37 @@ export default function TablePage() {
           </div>
         )}
 
+        {/* Etap 3 — gracz tramwajowy wyśrodkowany */}
+        {(state?.gamePhase === 'tram' || (state?.status === 'ended' && state?.tram)) && state?.tram && (() => {
+          const tramPlayer = state.players.find((p) => p.id === state.tram!.tramPlayerId);
+          if (!tramPlayer) return null;
+          const colorClass = AVATAR_COLORS[hashNick(tramPlayer.nick) % AVATAR_COLORS.length];
+          const initial = tramPlayer.nick.charAt(0).toUpperCase();
+          const isTramRestart = state.drinkGate?.resumeAction === 'tram-restart';
+          const bgClass = state.status === 'ended' ? 'bg-green-700' : isTramRestart ? 'bg-red-700' : 'bg-neutral-800';
+          return (
+            <div className="flex justify-center">
+              <div className={`flex flex-col gap-1 rounded-xl px-4 py-2 transition-colors duration-300 text-white ${bgClass} ${!tramPlayer.isConnected ? 'opacity-40' : ''}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${colorClass}`}>
+                    {initial}
+                  </div>
+                  <span className="font-medium text-sm">{tramPlayer.nick}</span>
+                  <span className="text-xs ml-1">🚋</span>
+                  <span className="text-xs ml-1 opacity-70">🍺 {tramPlayer.sips}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+
         {/* Etap 1 — zbieranie kart */}
         {state?.gamePhase === 'collecting' && state.collecting && (
           <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
             {/* Lewa część — gracze z zebranymi kartami */}
             <div className="flex flex-col gap-3 px-8 pb-8 overflow-y-auto w-1/2">
-              <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest">
-                Runda {state.collecting.round}/4
-              </p>
-              {state.players.map((player) => {
+{state.players.map((player) => {
                 const isActive = state.status === 'playing' && player.id === currentPlayerId;
                 const colorClass = AVATAR_COLORS[hashNick(player.nick) % AVATAR_COLORS.length];
                 const initial = player.nick.charAt(0).toUpperCase();
@@ -205,10 +216,10 @@ export default function TablePage() {
                 return (
                   <div
                     key={player.id}
-                    className={`flex flex-col gap-2 rounded-xl px-3 py-2 transition-all duration-300 ${
+                    className={`flex flex-col gap-2 rounded-xl px-3 transition-all duration-300 ${
                       isActive
-                        ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10'
-                        : 'bg-neutral-800 text-white'
+                        ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10 py-3'
+                        : 'bg-neutral-800 text-white py-2'
                     } ${!player.isConnected ? 'opacity-40' : ''}`}
                   >
                     <div className="flex items-center gap-2">
@@ -218,12 +229,16 @@ export default function TablePage() {
                         {initial}
                       </div>
                       <span className="font-medium text-sm">{player.nick}</span>
-                      <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
+                      <span className="text-xs ml-auto opacity-70">🍺 {player.sips}</span>
                     </div>
                     {hand.length > 0 && (
-                      <div className="flex gap-1 flex-wrap">
+                      <div
+                        className={`flex gap-1 overflow-hidden transition-[height] duration-300 ${
+                          isActive ? 'h-40' : 'h-9'
+                        }`}
+                      >
                         {hand.map((c, i) => (
-                          <Card key={i} card={c} size="sm" />
+                          <Card key={i} card={c} size={isActive ? 'md' : 'sm'} />
                         ))}
                       </div>
                     )}
@@ -300,71 +315,47 @@ export default function TablePage() {
           <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
             {/* Lewa część — streak + nick tramwajarza + tram-restart overlay + ended banner */}
             <div className="flex flex-col gap-4 px-8 pb-8 overflow-y-auto w-1/2">
-              {/* tram-restart overlay — kto przegrał i jakie karty miał */}
-              {state.drinkGate?.resumeAction === 'tram-restart' && state.drinkGate.context && (
-                <div className="rounded-xl border border-red-500 bg-red-500/10 px-4 py-4 flex flex-col gap-3">
-                  <p className="text-xl font-bold text-red-400">
-                    {state.players.find((p) => p.id === state.drinkGate!.context!.tramPlayerId)?.nick ?? '?'} przegrał — zaczyna od nowa
-                  </p>
-                  {state.drinkGate.context.streakCards && state.drinkGate.context.streakCards.length > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs text-neutral-400 uppercase tracking-widest">Karty z tego podejścia:</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {state.drinkGate.context.streakCards.map((c, i) => (
-                          <Card key={i} card={c} size="md" />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3 w-full flex-1 justify-center">
+<div className="flex flex-col gap-3 w-full flex-1 justify-center">
                 <div className="grid grid-cols-5 gap-2 w-full">
-                  {[0, 1, 2, 3, 4].map((i) => {
-                    const revealed = state.tram!.streakCards[i];
-                    return (
-                      <div key={i} className="aspect-[5/7] w-full">
-                        {revealed
-                          ? <Card card={revealed} size="fill" />
-                          : <Card faceDown size="fill" />}
-                      </div>
-                    );
-                  })}
+                  {(() => {
+                    const allCards = [state.tram!.referenceCard, ...state.tram!.streakCards];
+                    return [0, 1, 2, 3, 4].map((i) => {
+                      const card = allCards[i];
+                      return (
+                        <div key={i} className="aspect-[5/7] w-full">
+                          {card
+                            ? <Card card={card} size="fill" />
+                            : <Card faceDown size="fill" />}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
-              {state.status === 'ended' && (
-                <div className="flex flex-col items-center gap-3 mt-2">
-                  <h2 className="text-4xl font-bold">Koniec gry!</h2>
-                  {state.winnerId && (
-                    <p className="text-xl text-neutral-300">
-                      Tramwajarz:{' '}
-                      <strong className="text-white">
-                        {state.players.find((p) => p.id === state.winnerId)?.nick ?? '?'}
-                      </strong>{' '}
-                      dojedzie!
-                    </p>
-                  )}
-                  <p className="text-neutral-400">Sprawdźcie kto pije ile łyków.</p>
-                </div>
-              )}
             </div>
 
-            {/* Prawa część — karta referencyjna lub panel picia */}
+            {/* Prawa część — ostatnia wyciągnięta karta */}
             <RightCardPanel
-              card={state.tram.lastCard}
-              label="Karta referencyjna"
+              card={state.tram.lastCard ?? state.tram.referenceCard}
+              label="Ostatnia karta"
               drinkGate={state.drinkGate?.resumeAction !== 'tram-restart' ? state.drinkGate : null}
               players={state.players}
             />
           </div>
         )}
 
-        {/* Waiting */}
-        {state?.status === 'waiting' && state.players.length === 0 && (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-3xl font-bold text-neutral-700">Czekamy na graczy…</p>
+        {/* Waiting — QR + opcjonalny komunikat */}
+        {state?.status === 'waiting' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-8">
+            {joinUrl ? (
+              <QrPoster code={code} joinUrl={joinUrl} />
+            ) : (
+              <div className="w-64 h-64 bg-neutral-800 rounded-2xl animate-pulse" />
+            )}
+            {state.players.length === 0 && (
+              <p className="text-2xl font-bold text-neutral-700">Czekamy na graczy…</p>
+            )}
           </div>
         )}
 

@@ -337,42 +337,6 @@ export default function RoomPage() {
       </div>
 
       {/* DrinkGate — przystanek na picie (tylko tram-restart; collecting i pyramid obsługują slot inline) */}
-      {state.drinkGate?.resumeAction === 'tram-restart' && (() => {
-        const gate = state.drinkGate!;
-        const myEntry = gate.entries.find((e) => e.playerId === myPlayerId);
-        const confirmedCount = gate.entries.filter((e) => e.confirmed).length;
-
-        return (
-          <div className="flex flex-col gap-3 rounded-xl border border-amber-500 bg-amber-500/10 p-4">
-            {gate.context?.streakCards && gate.context.streakCards.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-semibold text-amber-400">Karty z tego podejścia:</p>
-                <div className="flex gap-1 flex-wrap">
-                  {gate.context.streakCards.map((c, i) => (
-                    <Card key={i} card={c} size="sm" />
-                  ))}
-                </div>
-              </div>
-            )}
-            {myEntry && !myEntry.confirmed ? (
-              <Button
-                className="h-16 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
-                onClick={handleConfirmDrink}
-              >
-                Jadę dalej
-              </Button>
-            ) : myEntry?.confirmed ? (
-              <p className="text-center text-emerald-400 font-medium py-2">
-                ✓ Potwierdzone — czekamy na innych ({confirmedCount}/{gate.entries.length})
-              </p>
-            ) : (
-              <p className="text-center text-amber-400 text-sm py-2">
-                {gate.entries.filter((e) => !e.confirmed).map((e) => state.players.find((p) => p.id === e.playerId)?.nick ?? e.playerId).join(', ')} {gate.entries.length === 1 ? 'pije' : 'piją'}…
-              </p>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Oczekiwanie na start */}
       {state.status === 'waiting' && (
@@ -728,29 +692,24 @@ export default function RoomPage() {
         const tram = state.tram;
         const isTramPlayer = tram.tramPlayerId === myPlayerId;
         const tramPlayer = state.players.find((p) => p.id === tram.tramPlayerId);
-        const isFirstCard = tram.lastCard === null;
+        const isFirstCard = tram.referenceCard === null;
         const isEnded = state.status === 'ended';
+        // Pełna sekwencja: slot 0 = referenceCard, sloty 1-4 = streakCards
+        const allCards: (typeof tram.referenceCard)[] = [
+          tram.referenceCard,
+          ...tram.streakCards,
+        ];
 
         return (
           <div className="flex flex-col gap-4 mt-2">
-            {/* Karta referencyjna */}
-            {tram.lastCard && !isEnded && (
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">
-                  Ostatnia karta
-                </p>
-                <Card card={tram.lastCard} size="lg" />
-              </div>
-            )}
-
-            {/* Streak jako karty */}
+            {/* Streak jako karty — slot 0 = referencyjna */}
             <div className="flex flex-col items-center gap-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest">Streak</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest">Tramwaj</p>
               <div className="flex items-end justify-center gap-1">
                 {[0, 1, 2, 3, 4].map((i) => {
-                  const revealed = tram.streakCards[i];
-                  return revealed
-                    ? <Card key={i} card={revealed} size="sm" />
+                  const card = allCards[i];
+                  return card
+                    ? <Card key={i} card={card} size="sm" />
                     : <Card key={i} faceDown size="sm" />;
                 })}
               </div>
@@ -777,14 +736,21 @@ export default function RoomPage() {
                   Opuść pokój
                 </Button>
               </div>
-            ) : isTramPlayer && !state.drinkGate ? (
+            ) : isTramPlayer ? (
               <>
-                {isFirstCard ? (
+                {state.drinkGate ? (
+                  <Button
+                    className="h-16 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+                    onClick={handleConfirmDrink}
+                  >
+                    Jadę dalej
+                  </Button>
+                ) : isFirstCard ? (
                   <Button
                     className="h-16 text-xl w-full"
                     onClick={() => handleTramGuess('reference')}
                   >
-                    Ciągnij kartę referencyjną
+                    Ciągnij kartę
                   </Button>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
