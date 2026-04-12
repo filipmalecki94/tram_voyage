@@ -83,7 +83,7 @@ export function startCollecting(state: GameState, rng: RNG): GameState {
     players: state.players.map((p) => ({ ...p, hand: [], sips: 0 })),
     status: 'playing',
     gamePhase: 'collecting',
-    collecting: { round: 1, currentPlayerIdx: 0 },
+    collecting: { round: 1, currentPlayerIdx: 0, pendingConfirm: null },
     pyramid: null,
     tram: null,
     winnerId: null,
@@ -186,6 +186,7 @@ export function advanceCollecting(state: GameState): GameState {
       collecting: {
         round: (col.round + 1) as 1 | 2 | 3 | 4,
         currentPlayerIdx: 0,
+        pendingConfirm: null,
       },
       currentTurnPlayerId: state.players[0].id,
     };
@@ -195,10 +196,31 @@ export function advanceCollecting(state: GameState): GameState {
       collecting: {
         ...col,
         currentPlayerIdx: nextPlayerIdx,
+        pendingConfirm: null,
       },
       currentTurnPlayerId: state.players[nextPlayerIdx].id,
     };
   }
+}
+
+/**
+ * Gracz potwierdza poprawne zgadnięcie ("Zgadłem!").
+ * Czyści pendingConfirm i przesuwa turę do następnego gracza.
+ */
+export function collectingConfirm(state: GameState, playerId: string): GameState {
+  if (state.gamePhase !== 'collecting' || !state.collecting) {
+    throw new Error('Nie w fazie zbierania');
+  }
+  if (state.collecting.pendingConfirm !== playerId) {
+    throw new Error('Nie czekamy na twoje potwierdzenie');
+  }
+  const stateAfterConfirm = {
+    ...state,
+    collecting: { ...state.collecting, pendingConfirm: null },
+  };
+  // Przesuwamy turę tylko jeśli drinkGate już wyczyszczony (wszyscy wypili)
+  if (stateAfterConfirm.drinkGate) return stateAfterConfirm;
+  return advanceCollecting(stateAfterConfirm);
 }
 
 /**
@@ -262,7 +284,13 @@ export function collectingGuess(
       })),
       resumeAction: 'collecting-next',
     };
-    newState = { ...newState, drinkGate: gate };
+    newState = {
+      ...newState,
+      drinkGate: gate,
+      collecting: newState.collecting
+        ? { ...newState.collecting, pendingConfirm: playerId }
+        : null,
+    };
     return { state: newState, card, correct, sipsAwarded, rainbowTriggered: true };
   } else if (!correct) {
     // Gracz musi pić 1 — ustawiamy drinkGate, wstrzymujemy postęp
@@ -273,9 +301,14 @@ export function collectingGuess(
     newState = { ...newState, drinkGate: gate };
     return { state: newState, card, correct, sipsAwarded: 1, rainbowTriggered: false };
   } else {
-    // Trafienie bez picia — od razu przesuwamy turę
-    newState = { ...newState, drinkGate: null };
-    newState = advanceCollecting(newState);
+    // Trafienie — czekamy na potwierdzenie gracza ("Zgadłem!") przed przesunięciem tury
+    newState = {
+      ...newState,
+      drinkGate: null,
+      collecting: newState.collecting
+        ? { ...newState.collecting, pendingConfirm: playerId }
+        : null,
+    };
     return { state: newState, card, correct, sipsAwarded: 0, rainbowTriggered: false };
   }
 }
@@ -701,6 +734,8 @@ export function confirmDrink(state: GameState, playerId: string, rng: RNG): Game
 
   switch (resume) {
     case 'collecting-next':
+      // Przesuwamy turę tylko jeśli gracz już potwierdził "Zgadłem!" (pendingConfirm wyczyszczone)
+      if (stateAfterSips.collecting?.pendingConfirm) return stateAfterSips;
       return advanceCollecting(stateAfterSips);
     case 'pyramid-next':
       // Host sam kliknie "Odsłoń następną kartę" po tym jak wszyscy potwierdzą

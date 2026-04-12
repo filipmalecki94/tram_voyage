@@ -33,6 +33,10 @@ export interface ClientToServerEvents {
     payload: { answer: string },
     cb: (res: Result<null>) => void,
   ) => void;
+  'game:collectingConfirm': (
+    payload: Record<string, never>,
+    cb: (res: Result<null>) => void,
+  ) => void;
   'game:pyramidAssign': (
     payload: { toPlayerId: string; sips: number },
     cb: (res: Result<null>) => void,

@@ -2,6 +2,7 @@ import {
   createGame,
   startCollecting,
   collectingGuess,
+  collectingConfirm,
   pyramidNext,
   pyramidAssignSips,
   tramGuess,
@@ -15,6 +16,7 @@ import {
   roomRejoinSchema,
   tableSubscribeSchema,
   collectingGuessSchema,
+  collectingConfirmSchema,
   pyramidAssignSchema,
   pyramidNextSchema,
   tramGuessSchema,
@@ -154,6 +156,25 @@ export function registerSocketHandlers(
             winnerId: result.state.winnerId ?? undefined,
           });
         }
+        cb({ ok: true, data: null });
+      } catch (e) {
+        cb({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    socket.on('game:collectingConfirm', (payload, cb) => {
+      const data = validate(collectingConfirmSchema, payload, cb);
+      if (!data) return;
+      const { playerId, roomCode } = socket.data;
+      if (!playerId || !roomCode) return cb({ ok: false, error: 'not_in_room' });
+      const room = rooms.getRoom(roomCode);
+      if (!room) return cb({ ok: false, error: 'no_room' });
+      if (room.gamePhase !== 'collecting') return cb({ ok: false, error: 'wrong_phase' });
+
+      try {
+        const newState = collectingConfirm(room, playerId);
+        rooms.updateRoom(roomCode, newState);
+        io.to(roomCode).emit('room:state', toPublicRoomState(newState));
         cb({ ok: true, data: null });
       } catch (e) {
         cb({ ok: false, error: (e as Error).message });

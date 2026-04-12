@@ -30,6 +30,8 @@ export interface DrinkGate {
 export interface CollectingSubState {
   round: 1 | 2 | 3 | 4;
   currentPlayerIdx: number;
+  /** playerId który zgadł poprawnie i czeka na potwierdzenie "Zgadłem!" */
+  pendingConfirm: string | null;
 }
 
 export interface PyramidPlayerDeal {

@@ -121,6 +121,7 @@ export default function RoomPage() {
     setSelectedAnswer(null);
   }, [state?.collecting?.currentPlayerIdx, state?.collecting?.round]);
 
+
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
     if (nick.length < 2 || nick.length > 16) return;
@@ -163,6 +164,11 @@ export default function RoomPage() {
     if (!res.ok) toast.error(res.error);
     setSelectedAnswer(null);
   }, [selectedAnswer, emit]);
+
+  const handleCollectingConfirm = useCallback(async () => {
+    const res = await emit('game:collectingConfirm', {});
+    if (!res.ok) toast.error(res.error);
+  }, [emit]);
 
   const handlePyramidNext = useCallback(async () => {
     const res = await emit('game:pyramidNext', {});
@@ -513,39 +519,80 @@ export default function RoomPage() {
                     })}
                   </div>
                 )}
-
-                {(() => {
-                  const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
-                  const pendingMyDrink = myEntry && !myEntry.confirmed;
-                  if (pendingMyDrink) {
-                    return (
-                      <Button
-                        className="h-14 text-xl w-full mt-2 bg-amber-500 hover:bg-amber-600 text-white"
-                        onClick={handleConfirmDrink}
-                      >
-                        Wypiłem 🍺 {myEntry!.sips}
-                      </Button>
-                    );
-                  }
-                  if (myEntry?.confirmed) {
-                    return (
-                      <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium mt-2">
-                        ✓ Wypiłem — czekamy na innych
-                      </p>
-                    );
-                  }
-                  return (
-                    <Button
-                      className="h-14 text-xl w-full mt-2"
-                      disabled={!selectedAnswer}
-                      onClick={handleCollectingGuess}
-                    >
-                      Ciągnij kartę
-                    </Button>
-                  );
-                })()}
               </>
             )}
+
+            {/* CTA slot — widoczny niezależnie od isMyTurn */}
+            {(() => {
+              const myEntry = state.drinkGate?.entries.find((e) => e.playerId === myPlayerId);
+              const pendingMyDrink = myEntry && !myEntry.confirmed;
+              const iWaitForConfirm = col.pendingConfirm === myPlayerId;
+
+              // Priorytet 1: muszę potwierdzić picie
+              if (pendingMyDrink) {
+                return (
+                  <Button
+                    className="h-14 text-xl w-full mt-2 bg-amber-500 hover:bg-amber-600 text-white"
+                    onClick={handleConfirmDrink}
+                  >
+                    Wypiłem 🍺 {myEntry!.sips}
+                  </Button>
+                );
+              }
+
+              // Priorytet 2: potwierdziłem picie, czekam na innych
+              if (myEntry?.confirmed) {
+                return (
+                  <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium mt-2">
+                    ✓ Wypiłem — czekamy na innych
+                  </p>
+                );
+              }
+
+              // Priorytet 3: muszę kliknąć "Zgadłem!" + drinkGate wciąż aktywny (tęcza)
+              if (iWaitForConfirm && state.drinkGate) {
+                return (
+                  <button
+                    className="h-14 text-xl w-full mt-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold transition-colors"
+                    onClick={handleCollectingConfirm}
+                  >
+                    ✓ Zgadłem! (czekamy aż wszyscy wypiją)
+                  </button>
+                );
+              }
+
+              // Priorytet 4: kliknąłem "Zgadłem!" wcześniej, czekam aż inni wypiją
+              if (!iWaitForConfirm && col.pendingConfirm === null && state.drinkGate && isMyTurn) {
+                return (
+                  <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium mt-2">
+                    ✓ Zgadłem — czekamy aż wszyscy wypiją
+                  </p>
+                );
+              }
+
+              // Priorytet 5: muszę kliknąć "Zgadłem!" (bez drinkGate — zwykłe trafienie)
+              if (iWaitForConfirm) {
+                return (
+                  <button
+                    className="h-14 text-xl w-full mt-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold transition-colors"
+                    onClick={handleCollectingConfirm}
+                  >
+                    ✓ Zgadłem!
+                  </button>
+                );
+              }
+
+              if (!isMyTurn) return null;
+              return (
+                <Button
+                  className="h-14 text-xl w-full mt-2"
+                  disabled={!selectedAnswer}
+                  onClick={handleCollectingGuess}
+                >
+                  Ciągnij kartę
+                </Button>
+              );
+            })()}
           </div>
         );
       })()}
