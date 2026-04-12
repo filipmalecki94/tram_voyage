@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/Card';
+import { HandFan } from '@/components/HandFan';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
 import { getSocket } from '@/lib/socket-client';
 import { cn } from '@/lib/utils';
@@ -245,24 +246,6 @@ export default function RoomPage() {
   const myHand = sortHand(state.handsByPlayerId[myPlayerId ?? ''] ?? []);
   const myIdx = state.players.findIndex((p) => p.id === myPlayerId);
 
-  // Wachlarz kart (widoczny we wszystkich fazach gry)
-  const HandFan = myHand.length > 0 ? (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-end justify-center z-10">
-      {myHand.map((card, i) => {
-        const offset = (i - (myHand.length - 1) / 2) * 28;
-        const rotate = (i - (myHand.length - 1) / 2) * 5;
-        return (
-          <div
-            key={`${card.rank}-${card.suit}`}
-            className="absolute transition-all duration-300"
-            style={{ transform: `translateX(${offset}px) rotate(${rotate}deg) translateY(12px)` }}
-          >
-            <Card card={card} size="sm" />
-          </div>
-        );
-      })}
-    </div>
-  ) : null;
 
   return (
     <main className="w-full min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-32">
@@ -788,7 +771,7 @@ export default function RoomPage() {
       })()}
 
       {/* Wachlarz kart */}
-      {state.status === 'playing' && myHand.length > 0 && HandFan}
+      {state.status === 'playing' && <HandFan hand={myHand} />}
 
       {/* Dummy — nie usuwaj, żeby myIdx nie był "unused" */}
       {myIdx === -1 && null}
