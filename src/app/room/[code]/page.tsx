@@ -408,6 +408,7 @@ export default function RoomPage() {
         const currentPlayer = state.players[col.currentPlayerIdx];
         const rainbowAvail = isMyTurn && isRainbowAvailable(myHand);
         const missing = rainbowAvail ? missingSuit(myHand) : null;
+        const blockGuess = !!state.drinkGate || col.pendingConfirm !== null;
 
         return (
           <div className="flex flex-col gap-4 mt-2">
@@ -428,8 +429,8 @@ export default function RoomPage() {
                       return (
                         <button
                           key={v}
-                          disabled={!!state.drinkGate}
-                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors ${
+                          disabled={blockGuess}
+                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             isBlack
                               ? `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
                               : `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
@@ -449,6 +450,7 @@ export default function RoomPage() {
                     <Button
                       variant={selectedAnswer === 'higher' ? 'default' : 'outline'}
                       className="h-16 text-lg"
+                      disabled={blockGuess}
                       onClick={() => setSelectedAnswer('higher')}
                     >
                       ▲ Wyżej
@@ -456,6 +458,7 @@ export default function RoomPage() {
                     <Button
                       variant={selectedAnswer === 'lower' ? 'default' : 'outline'}
                       className="h-16 text-lg"
+                      disabled={blockGuess}
                       onClick={() => setSelectedAnswer('lower')}
                     >
                       ▼ Niżej
@@ -469,6 +472,7 @@ export default function RoomPage() {
                     <Button
                       variant={selectedAnswer === 'inside' ? 'default' : 'outline'}
                       className="h-16 text-lg"
+                      disabled={blockGuess}
                       onClick={() => setSelectedAnswer('inside')}
                     >
                       Pomiędzy
@@ -476,6 +480,7 @@ export default function RoomPage() {
                     <Button
                       variant={selectedAnswer === 'outside' ? 'default' : 'outline'}
                       className="h-16 text-lg"
+                      disabled={blockGuess}
                       onClick={() => setSelectedAnswer('outside')}
                     >
                       Poza
@@ -494,8 +499,8 @@ export default function RoomPage() {
                         return (
                           <button
                             key={suit}
-                            disabled={!!state.drinkGate}
-                            className={`h-16 text-lg rounded-md border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white font-medium transition-opacity ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                            disabled={blockGuess}
+                            className={`h-16 text-lg rounded-md border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
                             onClick={() => setSelectedAnswer(suit)}
                           >
                             {SUIT_LABELS[suit]}
@@ -505,8 +510,8 @@ export default function RoomPage() {
                       return (
                         <button
                           key={suit}
-                          disabled={!!state.drinkGate}
-                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors ${
+                          disabled={blockGuess}
+                          className={`h-16 text-lg rounded-md border-2 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             isRed
                               ? `border-red-600 text-red-600 hover:bg-red-600/10 hover:text-red-600 ${selected ? 'bg-red-600/10 ring-2 ring-red-600' : 'bg-transparent'}`
                               : `border-neutral-900 text-neutral-900 hover:bg-neutral-900/10 hover:text-neutral-900 dark:border-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-100/10 dark:hover:text-neutral-100 ${selected ? 'bg-neutral-900/10 ring-2 ring-neutral-900 dark:bg-neutral-100/10 dark:ring-neutral-100' : 'bg-transparent'}`
@@ -586,7 +591,7 @@ export default function RoomPage() {
               return (
                 <Button
                   className="h-14 text-xl w-full mt-2"
-                  disabled={!selectedAnswer}
+                  disabled={!selectedAnswer || blockGuess}
                   onClick={handleCollectingGuess}
                 >
                   Ciągnij kartę

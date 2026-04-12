@@ -83,7 +83,7 @@ export function startCollecting(state: GameState, rng: RNG): GameState {
     players: state.players.map((p) => ({ ...p, hand: [], sips: 0 })),
     status: 'playing',
     gamePhase: 'collecting',
-    collecting: { round: 1, currentPlayerIdx: 0, pendingConfirm: null },
+    collecting: { round: 1, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
     pyramid: null,
     tram: null,
     winnerId: null,
@@ -187,6 +187,7 @@ export function advanceCollecting(state: GameState): GameState {
         round: (col.round + 1) as 1 | 2 | 3 | 4,
         currentPlayerIdx: 0,
         pendingConfirm: null,
+        currentCard: null,
       },
       currentTurnPlayerId: state.players[0].id,
     };
@@ -197,6 +198,7 @@ export function advanceCollecting(state: GameState): GameState {
         ...col,
         currentPlayerIdx: nextPlayerIdx,
         pendingConfirm: null,
+        currentCard: null,
       },
       currentTurnPlayerId: state.players[nextPlayerIdx].id,
     };
@@ -269,6 +271,7 @@ export function collectingGuess(
     deck: remainingDeck,
     drawnCards: [...state.drawnCards, card],
     players: updatedPlayers,
+    collecting: state.collecting ? { ...state.collecting, currentCard: card } : null,
   };
 
   if (rainbowTriggered) {

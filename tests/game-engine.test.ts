@@ -123,7 +123,7 @@ describe('startCollecting', () => {
     const base = createGame(makePlayers(3), seededRng(1));
     const state = startCollecting(base, seededRng(2));
     expect(state.gamePhase).toBe('collecting');
-    expect(state.collecting).toEqual({ round: 1, currentPlayerIdx: 0, pendingConfirm: null });
+    expect(state.collecting).toEqual({ round: 1, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null });
   });
 
   it('czyści ręce i sips graczy', () => {

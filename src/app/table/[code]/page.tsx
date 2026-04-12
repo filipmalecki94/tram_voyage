@@ -28,11 +28,13 @@ function RightCardPanel({
   label,
   drinkGate,
   players,
+  placeholder = 'Oczekiwanie na odsłonięcie…',
 }: {
   card: CardType | null;
   label: string;
   drinkGate: DrinkGate | null;
   players: PublicPlayer[];
+  placeholder?: string;
 }) {
   return (
     <div className="w-1/2 flex flex-col border-l border-neutral-800 bg-neutral-900/20 min-h-0 p-4">
@@ -75,7 +77,7 @@ function RightCardPanel({
                 <Card card={card} size="fill" />
               </div>
             ) : (
-              <p className="text-neutral-700 text-lg">Oczekiwanie na odsłonięcie…</p>
+              <p className="text-neutral-700 text-lg">{placeholder}</p>
             )}
           </div>
         </div>
@@ -146,8 +148,8 @@ export default function TablePage() {
           <p className="text-neutral-400 mt-1">{state === null ? 'Łączenie…' : phaseLabel}</p>
         </div>
 
-        {/* Lista graczy */}
-        {state && state.players.length > 0 && (
+        {/* Lista graczy — tylko poza Etapem 1 (tam jest w lewym panelu split-layoutu) */}
+        {state && state.players.length > 0 && state.gamePhase !== 'collecting' && (
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest mb-3">
               Gracze
@@ -180,10 +182,47 @@ export default function TablePage() {
                         <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
                       )}
                     </div>
-                    {/* Zebrane karty w Etapie 1 */}
-                    {state.gamePhase === 'collecting' && state.handsByPlayerId[player.id]?.length > 0 && (
-                      <div className="flex gap-1 flex-wrap mt-1">
-                        {state.handsByPlayerId[player.id].map((c, i) => (
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Etap 1 — zbieranie kart */}
+        {state?.gamePhase === 'collecting' && state.collecting && (
+          <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
+            {/* Lewa część — gracze z zebranymi kartami */}
+            <div className="flex flex-col gap-3 px-8 pb-8 overflow-y-auto w-1/2">
+              <p className="text-xs font-medium text-neutral-500 uppercase tracking-widest">
+                Runda {state.collecting.round}/4
+              </p>
+              {state.players.map((player) => {
+                const isActive = state.status === 'playing' && player.id === currentPlayerId;
+                const colorClass = AVATAR_COLORS[hashNick(player.nick) % AVATAR_COLORS.length];
+                const initial = player.nick.charAt(0).toUpperCase();
+                const hand = state.handsByPlayerId[player.id] ?? [];
+                return (
+                  <div
+                    key={player.id}
+                    className={`flex flex-col gap-2 rounded-xl px-3 py-2 transition-all duration-300 ${
+                      isActive
+                        ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10'
+                        : 'bg-neutral-800 text-white'
+                    } ${!player.isConnected ? 'opacity-40' : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isActive ? 'bg-neutral-900' : colorClass}`}
+                      >
+                        {initial}
+                      </div>
+                      <span className="font-medium text-sm">{player.nick}</span>
+                      <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
+                    </div>
+                    {hand.length > 0 && (
+                      <div className="flex gap-1 flex-wrap">
+                        {hand.map((c, i) => (
                           <Card key={i} card={c} size="sm" />
                         ))}
                       </div>
@@ -192,46 +231,17 @@ export default function TablePage() {
                 );
               })}
             </div>
+
+            {/* Prawa część — aktualna karta lub DrinkGate */}
+            <RightCardPanel
+              card={state.collecting.currentCard ?? null}
+              label="Aktualna karta"
+              drinkGate={state.drinkGate}
+              players={state.players}
+              placeholder="Oczekiwanie na odsłonięcie…"
+            />
           </div>
         )}
-
-        {/* DrinkGate banner — tylko w Etapie 1 (zbieranie); Etap 2/3 obsługuje to w RightCardPanel */}
-        {state?.drinkGate && state.gamePhase === 'collecting' && (
-          <div className="rounded-xl border border-amber-500 bg-amber-500/10 px-4 py-3 flex flex-col gap-2">
-            <p className="text-sm font-semibold text-amber-400 uppercase tracking-widest">
-              Przystanek — picie
-            </p>
-            <div className="flex flex-col gap-1">
-              {state.drinkGate.entries.map((entry) => {
-                const player = state.players.find((p) => p.id === entry.playerId);
-                return (
-                  <div key={entry.playerId} className="flex items-center justify-between text-sm">
-                    <span className={entry.confirmed ? 'line-through text-neutral-500' : 'text-white'}>
-                      {player?.nick ?? entry.playerId} — pije 🍺 {entry.sips}
-                    </span>
-                    <span className={entry.confirmed ? 'text-emerald-400' : 'text-amber-400'}>
-                      {entry.confirmed ? '✓ Wypiłem' : '⏳ czeka'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-xs text-neutral-400">
-              {state.drinkGate.entries.filter((e) => e.confirmed).length}/{state.drinkGate.entries.length} potwierdziło
-            </p>
-          </div>
-        )}
-
-        {/* Etap 1 — aktywna tura */}
-        {state?.gamePhase === 'collecting' && state.collecting && !state.drinkGate && (() => {
-          const currentPlayer = state.players[state.collecting.currentPlayerIdx];
-          return (
-            <p className="text-2xl font-semibold">
-              Runda {state.collecting.round}/4 — tura:{' '}
-              <span className="text-white">{currentPlayer?.nick ?? '...'}</span>
-            </p>
-          );
-        })()}
 
         {/* Etap 2 — Piramida */}
         {state?.gamePhase === 'pyramid' && state.pyramid && (

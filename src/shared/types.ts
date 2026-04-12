@@ -32,6 +32,8 @@ export interface CollectingSubState {
   currentPlayerIdx: number;
   /** playerId który zgadł poprawnie i czeka na potwierdzenie "Zgadłem!" */
   pendingConfirm: string | null;
+  /** Karta dobrana w bieżącej turze; null gdy tura się jeszcze nie zaczęła lub już zakończyła */
+  currentCard: Card | null;
 }
 
 export interface PyramidPlayerDeal {
