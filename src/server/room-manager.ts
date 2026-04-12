@@ -167,6 +167,7 @@ export class RoomManager {
     if (playerIds.length !== room.players.length) throw new Error('invalid_player_ids');
     const existingIds = new Set(room.players.map((p) => p.id));
     if (!playerIds.every((id) => existingIds.has(id))) throw new Error('invalid_player_ids');
+    if (playerIds[0] !== room.hostId) throw new Error('host_must_be_first');
 
     const newPlayers = playerIds.map((id) => room.players.find((p) => p.id === id)!);
     const newState: RoomState = { ...room, players: newPlayers };
