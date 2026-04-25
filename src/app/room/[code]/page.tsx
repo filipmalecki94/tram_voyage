@@ -532,7 +532,7 @@ export default function RoomPage() {
                     <button
                       key={suit}
                       disabled={blockGuess}
-                      className={`h-16 text-lg rounded-md border-2 border-transparent bg-gradient-to-r from-red-400 via-yellow-300 via-green-400 via-blue-400 to-purple-500 text-white font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed ${selected ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                      className={`h-16 text-lg rounded-md font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all ${selected ? 'rainbow-btn text-white scale-105 shadow-md' : `rainbow-border-btn ${isRed ? 'text-red-600' : 'text-neutral-900 dark:text-neutral-100'}`}`}
                       onClick={() => setSelectedAnswer(suit)}
                     >
                       {SUIT_LABELS[suit]}

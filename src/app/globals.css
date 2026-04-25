@@ -144,8 +144,38 @@
   animation: card-in 0.4s ease-out;
 }
 
+@keyframes rainbow-shift {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 0 0, 200% 0; }
+}
+
+@keyframes rainbow-bg-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.rainbow-border-btn {
+  background:
+    linear-gradient(var(--background), var(--background)) padding-box,
+    linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00cc00, #0000ff, #8b00ff, #ff0000) border-box;
+  background-size: auto, 200% 100%;
+  border: 3px solid transparent;
+  animation: rainbow-shift 2.5s linear infinite;
+}
+
+.rainbow-btn {
+  background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00cc00, #0000ff, #8b00ff, #ff0000);
+  background-size: 200% 100%;
+  border: 3px solid transparent;
+  animation: rainbow-bg-shift 2.5s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-in {
     animation: none;
+  }
+  .rainbow-border-btn {
+    animation: none;
+    background-size: auto, 100% 100%;
   }
 }
