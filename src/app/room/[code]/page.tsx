@@ -25,7 +25,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, X } from 'lucide-react';
 
 const RANK_ORDER = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K', 'A'] as const;
 
@@ -58,10 +58,14 @@ function SortablePlayerItem({
   player,
   isMe,
   isHost,
+  canKick,
+  onKick,
 }: {
   player: PublicPlayer;
   isMe: boolean;
   isHost: boolean;
+  canKick?: boolean;
+  onKick?: (playerId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: player.id,
@@ -97,6 +101,15 @@ function SortablePlayerItem({
       >
         {player.nick}
       </span>
+      {canKick && !isMe && (
+        <button
+          className="flex-shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+          onClick={() => onKick?.(player.id)}
+          aria-label={`Usuń gracza ${player.nick}`}
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 }
@@ -192,6 +205,18 @@ export default function RoomPage() {
     setSelectedAnswer(null);
   }, [state?.collecting?.currentPlayerIdx, state?.collecting?.round]);
 
+  // Redirect wyrzuconego gracza
+  useEffect(() => {
+    if (!myPlayerId || !state) return;
+    const stillInRoom = state.players.some((p) => p.id === myPlayerId);
+    if (!stillInRoom) {
+      localStorage.removeItem(`tram:token:${code}`);
+      localStorage.removeItem(`tram:playerId:${code}`);
+      toast.error('Zostałeś usunięty z pokoju przez hosta.');
+      router.push('/');
+    }
+  }, [state, myPlayerId, code, router]);
+
 
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
@@ -220,6 +245,11 @@ export default function RoomPage() {
 
   const handleStart = useCallback(async () => {
     await emit('game:start', {});
+  }, [emit]);
+
+  const handleKick = useCallback(async (targetPlayerId: string) => {
+    const res = await emit('room:kickPlayer', { targetPlayerId });
+    if (!res.ok) toast.error('Nie udało się usunąć gracza');
   }, [emit]);
 
   const handleLeave = useCallback(async () => {
@@ -702,6 +732,8 @@ export default function RoomPage() {
                   player={player}
                   isMe={player.id === myPlayerId}
                   isHost={player.id === state.hostPlayerId}
+                  canKick={amHost && state.status === 'waiting'}
+                  onKick={handleKick}
                 />
               ))}
             </SortableContext>

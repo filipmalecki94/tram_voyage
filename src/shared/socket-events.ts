@@ -57,6 +57,10 @@ export interface ClientToServerEvents {
     payload: { playerIds: string[] },
     cb: (res: Result<null>) => void,
   ) => void;
+  'room:kickPlayer': (
+    payload: { targetPlayerId: string },
+    cb: (res: Result<null>) => void,
+  ) => void;
 }
 
 export interface ServerToClientEvents {

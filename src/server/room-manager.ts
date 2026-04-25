@@ -159,6 +159,30 @@ export class RoomManager {
     return newState;
   }
 
+  kickPlayer(code: string, hostId: string, targetPlayerId: string): RoomState {
+    const room = this.rooms.get(code);
+    if (!room) throw new Error('no_room');
+    if (room.status !== 'waiting') throw new Error('game_already_started');
+    if (hostId !== room.hostId) throw new Error('not_host');
+    if (targetPlayerId === hostId) throw new Error('cannot_kick_self');
+    if (!room.players.some((p) => p.id === targetPlayerId)) throw new Error('player_not_found');
+
+    const newPlayers = room.players.filter((p) => p.id !== targetPlayerId);
+
+    for (const [t, session] of this.sessions) {
+      if (session.playerId === targetPlayerId) {
+        this.sessions.delete(t);
+        break;
+      }
+    }
+    this.disconnectedAt.delete(targetPlayerId);
+
+    const newState: RoomState = { ...room, players: newPlayers };
+    this.rooms.set(code, newState);
+    this.meta.set(code, { ...this.meta.get(code)!, lastActivityAt: Date.now() });
+    return newState;
+  }
+
   reorderPlayers(code: string, requesterId: string, playerIds: string[]): RoomState {
     const room = this.rooms.get(code);
     if (!room) throw new Error('no_room');

@@ -56,6 +56,10 @@ export const roomReorderPlayersSchema = z.object({
   playerIds: z.array(z.string()).min(2).max(12),
 });
 
+export const roomKickPlayerSchema = z.object({
+  targetPlayerId: z.string().min(1),
+});
+
 export function validate<T>(
   schema: z.ZodSchema<T>,
   payload: unknown,

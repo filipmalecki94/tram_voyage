@@ -22,6 +22,7 @@ import {
   tramGuessSchema,
   confirmDrinkSchema,
   roomReorderPlayersSchema,
+  roomKickPlayerSchema,
   validate,
 } from '@/server/schemas';
 import type { AppServer, AppSocket } from '@/shared/socket-events';
@@ -122,6 +123,20 @@ export function registerSocketHandlers(
       if (!playerId || !roomCode) return cb({ ok: false, error: 'not_in_room' });
       try {
         const newState = rooms.reorderPlayers(roomCode, playerId, data.playerIds);
+        io.to(roomCode).emit('room:state', toPublicRoomState(newState));
+        cb({ ok: true, data: null });
+      } catch (e) {
+        cb({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    socket.on('room:kickPlayer', (payload, cb) => {
+      const data = validate(roomKickPlayerSchema, payload, cb);
+      if (!data) return;
+      const { playerId, roomCode } = socket.data;
+      if (!playerId || !roomCode) return cb({ ok: false, error: 'not_in_room' });
+      try {
+        const newState = rooms.kickPlayer(roomCode, playerId, data.targetPlayerId);
         io.to(roomCode).emit('room:state', toPublicRoomState(newState));
         cb({ ok: true, data: null });
       } catch (e) {
