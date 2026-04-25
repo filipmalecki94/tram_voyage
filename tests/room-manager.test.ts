@@ -47,9 +47,9 @@ describe('RoomManager', () => {
       expect(updated.players[1].nick).toBe('Bob');
     });
 
-    it('rzuca room_full po osiągnięciu 12 graczy', () => {
+    it('rzuca room_full po osiągnięciu 18 graczy', () => {
       const { state } = rooms.createRoom('Host');
-      for (let i = 1; i < 12; i++) {
+      for (let i = 1; i < 18; i++) {
         rooms.joinRoom(state.code, `Gracz${i}`);
       }
       expect(() => rooms.joinRoom(state.code, 'Extra')).toThrow('room_full');
