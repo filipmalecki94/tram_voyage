@@ -5,6 +5,7 @@ import { Card } from '@/components/Card';
 import { QrPoster } from '@/components/QrPoster';
 import { useRoom } from '@/lib/use-room';
 import type { Card as CardType, DrinkGate, PublicPlayer } from '@/shared/types';
+import { MarqueeText } from '@/components/MarqueeText';
 
 const AVATAR_COLORS = [
   'bg-red-500',
@@ -142,39 +143,40 @@ export default function TablePage() {
 
         {/* Lista graczy — tylko poza Etapem 1 (tam jest w lewym panelu split-layoutu) */}
         {state && state.players.length > 0 && state.gamePhase !== 'collecting' && state.gamePhase !== 'tram' && state.status !== 'ended' && (
-          <div>
-            <div className="flex flex-wrap gap-3">
-              {state.players.map((player) => {
-                const isActive = state.status === 'playing' && player.id === currentPlayerId;
-                const colorClass = AVATAR_COLORS[hashNick(player.nick) % AVATAR_COLORS.length];
-                const initial = player.nick.charAt(0).toUpperCase();
-                const hasActiveDeal = state.gamePhase === 'pyramid' &&
-                  !!state.pyramid?.activeDeals[player.id];
-                const isHighlighted = state.gamePhase === 'pyramid' ? hasActiveDeal : isActive;
-                return (
-                  <div
-                    key={player.id}
-                    className={`flex flex-col gap-1 rounded-xl px-3 py-2 transition-all duration-300 ${
-                      isHighlighted
-                        ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10'
-                        : 'bg-neutral-800 text-white'
-                    } ${!player.isConnected ? 'opacity-40' : ''}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isHighlighted ? 'bg-neutral-900' : colorClass}`}
-                      >
-                        {initial}
-                      </div>
-                      <span className="font-medium text-sm">{player.nick}</span>
-                      {(state.status === 'ended' || state.gamePhase !== null) && (
-                        <span className="text-xs ml-1 opacity-70">🍺 {player.sips}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="grid grid-cols-3 gap-1">
+            {state.players.map((player) => {
+              const isActive = state.status === 'playing' && player.id === currentPlayerId;
+              const hasActiveDeal = state.gamePhase === 'pyramid' &&
+                !!state.pyramid?.activeDeals[player.id];
+              const isHighlighted = state.gamePhase === 'pyramid' ? hasActiveDeal : isActive;
+              const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
+              const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
+              const remainingToGive = state.pyramid?.activeDeals[player.id]?.remainingSips ?? 0;
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-1.5 rounded-md px-2 h-9 min-w-0 transition-all duration-300 ${
+                    isHighlighted ? 'bg-white text-neutral-900' : 'bg-neutral-800 text-white'
+                  } ${!player.isConnected ? 'opacity-40' : ''}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`} />
+                  <MarqueeText text={player.nick} className="text-sm font-medium flex-1 min-w-0" />
+                  {remainingToGive > 0 && (
+                    <span className="text-[11px] px-0.5 rounded font-bold tabular-nums leading-tight bg-sky-500 text-white flex-shrink-0">
+                      →{remainingToGive}
+                    </span>
+                  )}
+                  {pendingSips > 0 && (
+                    <span className="text-[11px] px-0.5 rounded font-bold tabular-nums leading-tight bg-amber-500 text-white flex-shrink-0">
+                      +{pendingSips}
+                    </span>
+                  )}
+                  {state.gamePhase !== null && (
+                    <span className="text-[11px] tabular-nums flex-shrink-0 opacity-70">🍺{player.sips}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

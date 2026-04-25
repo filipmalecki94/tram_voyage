@@ -7,6 +7,7 @@ import { Card } from '@/components/Card';
 import { HandFan } from '@/components/HandFan';
 import { ActivePlayerFan } from '@/components/ActivePlayerFan';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
+import { MarqueeText } from '@/components/MarqueeText';
 import { getSocket } from '@/lib/socket-client';
 import { cn } from '@/lib/utils';
 import type { Card as CardType, Suit, PublicPlayer } from '@/shared/types';
@@ -766,6 +767,8 @@ export default function RoomPage() {
               const isHost = player.id === state.hostPlayerId;
               const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
               const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
+              const activeDeal = state.gamePhase === 'pyramid' ? state.pyramid?.activeDeals[player.id] : undefined;
+              const remainingToGive = activeDeal?.remainingSips ?? 0;
               const inGame = state.status === 'ended' || state.gamePhase !== null;
               return (
                 <div
@@ -775,18 +778,22 @@ export default function RoomPage() {
                   <span
                     className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
                   />
-                  <span
+                  <MarqueeText
+                    text={player.nick}
                     className={cn(
-                      'text-xs font-medium truncate flex-1 min-w-0',
+                      'text-xs font-medium flex-1 min-w-0',
                       isHost && !isCurrentTurn && 'text-yellow-500',
                       isHost && isCurrentTurn && 'text-yellow-300',
                       isMe && 'underline',
                     )}
-                  >
-                    {player.nick}
-                  </span>
+                  />
                   {inGame && (
                     <>
+                      {remainingToGive > 0 && (
+                        <span className="text-[10px] px-0.5 rounded font-bold tabular-nums leading-tight bg-sky-500 text-white flex-shrink-0">
+                          →{remainingToGive}
+                        </span>
+                      )}
                       {pendingSips > 0 && (
                         <span className="text-[10px] px-0.5 rounded font-bold tabular-nums leading-tight bg-amber-500 text-white flex-shrink-0">
                           +{pendingSips}

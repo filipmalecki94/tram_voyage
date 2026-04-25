@@ -170,6 +170,15 @@
   animation: rainbow-bg-shift 2.5s linear infinite;
 }
 
+@keyframes nick-marquee {
+  0%, 20% { transform: translateX(0); }
+  80%, 100% { transform: translateX(var(--marquee-offset, 0px)); }
+}
+
+.nick-marquee {
+  animation: nick-marquee 5s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-in {
     animation: none;
@@ -177,5 +186,8 @@
   .rainbow-border-btn {
     animation: none;
     background-size: auto, 100% 100%;
+  }
+  .nick-marquee {
+    animation: none;
   }
 }
