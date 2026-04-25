@@ -755,52 +755,50 @@ export default function RoomPage() {
             </SortableContext>
           </DndContext>
         ) : (
-          state.players.map((player) => {
-            const isCurrentTurn =
-              state.status === 'playing' &&
-              (state.collecting
-                ? state.players[state.collecting.currentPlayerIdx]?.id === player.id
-                : state.currentPlayerId === player.id);
-            const isMe = player.id === myPlayerId;
-            const isHost = player.id === state.hostPlayerId;
-            const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
-            const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
-            const inGame = state.status === 'ended' || state.gamePhase !== null;
-            return (
-              <div
-                key={player.id}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 ${isCurrentTurn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
-                />
-                <span
-                  className={cn(
-                    'flex-1 font-medium truncate',
-                    isHost && !isCurrentTurn && 'text-yellow-500',
-                    isHost && isCurrentTurn && 'text-yellow-300',
-                    isMe && 'underline',
-                  )}
+          <div className="grid grid-cols-3 gap-1 h-[140px] overflow-y-auto content-start">
+            {state.players.map((player) => {
+              const isCurrentTurn =
+                state.status === 'playing' &&
+                (state.collecting
+                  ? state.players[state.collecting.currentPlayerIdx]?.id === player.id
+                  : state.currentPlayerId === player.id);
+              const isMe = player.id === myPlayerId;
+              const isHost = player.id === state.hostPlayerId;
+              const gateEntry = state.drinkGate?.entries.find((e) => e.playerId === player.id);
+              const pendingSips = gateEntry && !gateEntry.confirmed ? gateEntry.sips : 0;
+              const inGame = state.status === 'ended' || state.gamePhase !== null;
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-1 rounded-md px-1.5 h-8 min-w-0 ${isCurrentTurn ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
                 >
-                  {player.nick}
-                </span>
-                {/* Prawa strona — stała szerokość: badge (invisible gdy 0) + licznik */}
-                {inGame && (
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <span
-                      className={cn(
-                        'text-xs px-1.5 py-0.5 rounded font-semibold tabular-nums',
-                        pendingSips > 0 ? 'bg-amber-500 text-white' : 'invisible',
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${player.isConnected ? 'bg-green-500' : 'bg-neutral-400'}`}
+                  />
+                  <span
+                    className={cn(
+                      'text-xs font-medium truncate flex-1 min-w-0',
+                      isHost && !isCurrentTurn && 'text-yellow-500',
+                      isHost && isCurrentTurn && 'text-yellow-300',
+                      isMe && 'underline',
+                    )}
+                  >
+                    {player.nick}
+                  </span>
+                  {inGame && (
+                    <>
+                      {pendingSips > 0 && (
+                        <span className="text-[10px] px-0.5 rounded font-bold tabular-nums leading-tight bg-amber-500 text-white flex-shrink-0">
+                          +{pendingSips}
+                        </span>
                       )}
-                    >
-                      +{pendingSips}
-                    </span>
-                    <span className="text-xs tabular-nums w-9 text-right">🍺 {player.sips}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })
+                      <span className="text-[10px] tabular-nums flex-shrink-0 opacity-80">🍺{player.sips}</span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
