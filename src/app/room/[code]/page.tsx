@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/Card';
 import { HandFan } from '@/components/HandFan';
+import { ActivePlayerFan } from '@/components/ActivePlayerFan';
 import { useRoom, useRoomRejoin } from '@/lib/use-room';
 import { getSocket } from '@/lib/socket-client';
 import { cn } from '@/lib/utils';
@@ -802,6 +803,14 @@ export default function RoomPage() {
           })
         )}
       </div>
+
+      {/* Ręka aktywnego gracza — peek z dołu listy graczy (etap 1) */}
+      {state.gamePhase === 'collecting' && state.collecting && (() => {
+        const activePlayer = state.players[state.collecting.currentPlayerIdx];
+        if (!activePlayer || activePlayer.id === myPlayerId) return null;
+        const activeHand = state.handsByPlayerId[activePlayer.id] ?? [];
+        return <ActivePlayerFan hand={activeHand} />;
+      })()}
 
       {/* Oczekiwanie na start — info (bez przycisków, te są w action zone) */}
       {state.status === 'waiting' && !amHost && (
