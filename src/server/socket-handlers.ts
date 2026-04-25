@@ -6,6 +6,7 @@ import {
   pyramidNext,
   pyramidAssignSips,
   tramGuess,
+  tramNext,
   confirmDrink,
   type CollectingGuess,
 } from '@/server/game-engine';
@@ -20,6 +21,7 @@ import {
   pyramidAssignSchema,
   pyramidNextSchema,
   tramGuessSchema,
+  tramNextSchema,
   confirmDrinkSchema,
   roomReorderPlayersSchema,
   roomKickPlayerSchema,
@@ -276,6 +278,26 @@ export function registerSocketHandlers(
             winnerId: result.state.winnerId ?? undefined,
           });
         }
+        cb({ ok: true, data: null });
+      } catch (e) {
+        cb({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    socket.on('game:tramNext', (payload, cb) => {
+      const data = validate(tramNextSchema, payload, cb);
+      if (data === null) return;
+      const { playerId, roomCode } = socket.data;
+      if (!playerId || !roomCode) return cb({ ok: false, error: 'not_in_room' });
+      const room = rooms.getRoom(roomCode);
+      if (!room) return cb({ ok: false, error: 'no_room' });
+      if (room.hostId !== playerId) return cb({ ok: false, error: 'not_host' });
+      if (room.gamePhase !== 'tram') return cb({ ok: false, error: 'wrong_phase' });
+
+      try {
+        const newState = tramNext(room, playerId);
+        rooms.updateRoom(roomCode, newState);
+        io.to(roomCode).emit('room:state', toPublicRoomState(newState));
         cb({ ok: true, data: null });
       } catch (e) {
         cb({ ok: false, error: (e as Error).message });

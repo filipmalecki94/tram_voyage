@@ -53,6 +53,10 @@ export interface ClientToServerEvents {
     payload: Record<string, never>,
     cb: (res: Result<null>) => void,
   ) => void;
+  'game:tramNext': (
+    payload: Record<string, never>,
+    cb: (res: Result<null>) => void,
+  ) => void;
   'room:reorderPlayers': (
     payload: { playerIds: string[] },
     cb: (res: Result<null>) => void,

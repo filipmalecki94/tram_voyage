@@ -50,6 +50,8 @@ export const tramGuessSchema = z.object({
 
 export const confirmDrinkSchema = z.object({}).strict();
 
+export const tramNextSchema = z.object({}).strict();
+
 export const collectingConfirmSchema = z.object({}).strict();
 
 export const roomReorderPlayersSchema = z.object({

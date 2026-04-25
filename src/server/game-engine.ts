@@ -586,6 +586,7 @@ export function enterTram(state: GameState, tramPlayerId: string, rng: RNG): Gam
     streak: 0,
     tramPlayerId,
     streakCards: [],
+    tramAwaitingHostNext: false,
   };
   return {
     ...state,
@@ -615,6 +616,7 @@ export function restartTramStreak(state: GameState): GameState {
       lastCard: null,
       streak: 0,
       streakCards: [],
+      tramAwaitingHostNext: false,
     },
     currentTurnPlayerId: state.tram.tramPlayerId,
     drinkGate: null,
@@ -720,6 +722,23 @@ export function tramGuess(
 }
 
 // ----------------------------------------------------------------
+// Etap 3 — host zatwierdza kolejną rundę tramwaju
+// ----------------------------------------------------------------
+
+export function tramNext(state: GameState, playerId: string): GameState {
+  if (state.gamePhase !== 'tram' || !state.tram) {
+    throw new Error('Nie w fazie tramwaju');
+  }
+  if (state.hostId !== playerId) {
+    throw new Error('Tylko host może zatwierdzić kolejną rundę');
+  }
+  if (!state.tram.tramAwaitingHostNext) {
+    throw new Error('Nie czekamy na potwierdzenie hosta');
+  }
+  return restartTramStreak(state);
+}
+
+// ----------------------------------------------------------------
 // DrinkGate — potwierdzenie picia
 // ----------------------------------------------------------------
 
@@ -765,6 +784,12 @@ export function confirmDrink(state: GameState, playerId: string, rng: RNG): Game
       // Host sam kliknie "Odsłoń następną kartę" po tym jak wszyscy potwierdzą
       return stateAfterSips;
     case 'tram-restart':
-      return restartTramStreak(stateAfterSips);
+      // Host musi zatwierdzić kolejną rundę — zapobiega zbyt szybkiemu klikaniu
+      return {
+        ...stateAfterSips,
+        tram: stateAfterSips.tram
+          ? { ...stateAfterSips.tram, tramAwaitingHostNext: true }
+          : stateAfterSips.tram,
+      };
   }
 }

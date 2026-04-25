@@ -15,6 +15,7 @@ import {
   pickTramPlayer,
   enterTram,
   tramGuess,
+  tramNext,
   confirmDrink,
   type CollectingGuess,
 } from '@/server/game-engine';
@@ -840,7 +841,7 @@ describe('tramGuess', () => {
     expect(r.state.tram!.deck.length).toBe(51);
   });
 
-  it('po błędzie confirmDrink kontynuuje ten sam deck', () => {
+  it('po błędzie confirmDrink ustawia flagę hostNext, tramNext kontynuuje ten sam deck', () => {
     const base = createGame(makePlayers(2), seededRng(1));
     const s = enterTram(base, 'p1', seededRng(1));
     const refCard: Card = { rank: 10, suit: 'spades' };
@@ -851,11 +852,17 @@ describe('tramGuess', () => {
     };
     const r1 = tramGuess(prepared, 'p1', 'lower', seededRng(1));
     const deckAfterWrong = r1.state.tram!.deck;
-    const after = confirmDrink(r1.state, 'p1', seededRng(1));
-    expect(after.tram!.deck).toEqual(deckAfterWrong); // deck bez re-tasowania
-    expect(after.tram!.deck.length).toBe(deckAfterWrong.length);
-    expect(after.tram!.streak).toBe(0);
-    expect(after.tram!.lastCard).toBeNull();
+    const afterConfirm = confirmDrink(r1.state, 'p1', seededRng(1));
+    // Po confirmDrink: drinkGate null, flaga hostNext true, streak jeszcze nie zresetowany
+    expect(afterConfirm.drinkGate).toBeNull();
+    expect(afterConfirm.tram!.tramAwaitingHostNext).toBe(true);
+    // Host zatwierdza → streak resetowany, deck zachowany
+    const afterNext = tramNext(afterConfirm, afterConfirm.hostId!);
+    expect(afterNext.tram!.deck).toEqual(deckAfterWrong); // deck bez re-tasowania
+    expect(afterNext.tram!.deck.length).toBe(deckAfterWrong.length);
+    expect(afterNext.tram!.streak).toBe(0);
+    expect(afterNext.tram!.lastCard).toBeNull();
+    expect(afterNext.tram!.tramAwaitingHostNext).toBe(false);
   });
 });
 
@@ -951,7 +958,7 @@ describe('confirmDrink', () => {
     expect(() => pyramidNext(afterConfirm, seededRng(1))).not.toThrow();
   });
 
-  it('tram — confirmDrink resetuje streak ale zachowuje deck', () => {
+  it('tram — confirmDrink ustawia hostNext, tramNext resetuje streak ale zachowuje deck', () => {
     const base = createGame(makePlayers(2), seededRng(1));
     const s = enterTram(base, base.players[0].id, seededRng(1));
 
@@ -972,12 +979,17 @@ describe('confirmDrink', () => {
     const deckBeforeConfirm = r1.state.tram!.deck; // deck po pop wrong-card'a
 
     const afterConfirm = confirmDrink(r1.state, r1.state.tram!.tramPlayerId, seededRng(1));
-    // Streak zresetowany, ale deck zachowany (ta sama pula, nie nowa talia)
+    // drinkGate null, sipsy zapisane, flaga hostNext true
     expect(afterConfirm.drinkGate).toBeNull();
-    expect(afterConfirm.tram!.streak).toBe(0);
-    expect(afterConfirm.tram!.streakCards).toHaveLength(0);
-    expect(afterConfirm.tram!.lastCard).toBeNull();
-    expect(afterConfirm.tram!.deck).toEqual(deckBeforeConfirm);
+    expect(afterConfirm.tram!.tramAwaitingHostNext).toBe(true);
     expect(afterConfirm.players.find((p) => p.id === r1.state.tram!.tramPlayerId)!.sips).toBe(1);
+
+    // Host zatwierdza → streak zresetowany, deck zachowany
+    const afterNext = tramNext(afterConfirm, afterConfirm.hostId!);
+    expect(afterNext.tram!.streak).toBe(0);
+    expect(afterNext.tram!.streakCards).toHaveLength(0);
+    expect(afterNext.tram!.lastCard).toBeNull();
+    expect(afterNext.tram!.deck).toEqual(deckBeforeConfirm);
+    expect(afterNext.tram!.tramAwaitingHostNext).toBe(false);
   });
 });

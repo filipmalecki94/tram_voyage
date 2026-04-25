@@ -321,7 +321,7 @@ export default function TablePage() {
                 <div className="grid grid-cols-5 gap-2 w-full">
                   {(() => {
                     const allCards = [state.tram!.referenceCard, ...state.tram!.streakCards];
-                    const failedCard = state.drinkGate?.resumeAction === 'tram-restart' ? state.tram!.lastCard : null;
+                    const failedCard = (state.drinkGate?.resumeAction === 'tram-restart' || state.tram!.tramAwaitingHostNext) ? state.tram!.lastCard : null;
                     const failedSlot = failedCard ? allCards.length : -1;
                     return [0, 1, 2, 3, 4].map((i) => {
                       const card = allCards[i];

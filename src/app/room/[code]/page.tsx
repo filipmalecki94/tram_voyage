@@ -293,6 +293,11 @@ export default function RoomPage() {
     if (!res.ok) toast.error(res.error);
   }, [emit]);
 
+  const handleTramNext = useCallback(async () => {
+    const res = await emit('game:tramNext', {});
+    if (!res.ok) toast.error(res.error);
+  }, [emit]);
+
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     if (!state) return;
     const { active, over } = event;
@@ -670,6 +675,29 @@ export default function RoomPage() {
     if (state.gamePhase === 'tram' && state.tram) {
       const tram = state.tram;
       const isTramPlayer = tram.tramPlayerId === myPlayerId;
+
+      // Host zatwierdza kolejną rundę po wypiciu kary
+      if (tram.tramAwaitingHostNext) {
+        if (amHost) {
+          return (
+            <Button
+              className="h-16 text-xl w-full"
+              onClick={handleTramNext}
+            >
+              Następna runda 🚃
+            </Button>
+          );
+        }
+        if (isTramPlayer) {
+          return (
+            <p className="h-16 flex items-center justify-center text-center text-muted-foreground">
+              Czekamy na hosta...
+            </p>
+          );
+        }
+        return null;
+      }
+
       if (!isTramPlayer) return null;
       const isFirstCard = tram.referenceCard === null;
 
@@ -884,7 +912,7 @@ export default function RoomPage() {
               <p className="text-xs text-muted-foreground uppercase tracking-widest">Tramwaj</p>
               <div className="flex items-end justify-center gap-1">
                 {(() => {
-                  const failedCard = state.drinkGate?.resumeAction === 'tram-restart' ? tram.lastCard : null;
+                  const failedCard = (state.drinkGate?.resumeAction === 'tram-restart' || tram.tramAwaitingHostNext) ? tram.lastCard : null;
                   const failedSlot = failedCard ? allCards.length : -1;
                   return [0, 1, 2, 3, 4].map((i) => {
                     const card = allCards[i];

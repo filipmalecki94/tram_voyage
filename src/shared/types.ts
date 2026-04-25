@@ -76,6 +76,7 @@ export interface TramSubState {
   streak: number;
   tramPlayerId: string;
   streakCards: Card[];
+  tramAwaitingHostNext: boolean;
 }
 
 export interface PublicTramSubState {
@@ -85,6 +86,7 @@ export interface PublicTramSubState {
   streak: number;
   tramPlayerId: string;
   streakCards: Card[];
+  tramAwaitingHostNext: boolean;
 }
 
 export interface Player {
@@ -179,6 +181,7 @@ export function toPublicRoomState(s: RoomState): PublicRoomState {
       streak: s.tram.streak,
       tramPlayerId: s.tram.tramPlayerId,
       streakCards: s.tram.streakCards,
+      tramAwaitingHostNext: s.tram.tramAwaitingHostNext,
     };
   }
 
