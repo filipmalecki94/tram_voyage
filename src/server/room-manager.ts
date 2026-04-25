@@ -12,7 +12,7 @@ interface RoomMeta {
   lastActivityAt: number;
 }
 
-const MAX_PLAYERS = 12;
+const MAX_PLAYERS = 18;
 const ROOM_TTL_MS = 2 * 60 * 60_000;       // 2h
 const DISCONNECTED_TTL_MS = 10 * 60_000;    // 10min
 

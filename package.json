@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch server.ts",
+    "dev": "PORT=3001 tsx watch server.ts",
     "build": "next build",
     "start": "node dist/server.js",
     "lint": "eslint",

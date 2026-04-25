@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Card } from '@/components/Card';
 import { QrPoster } from '@/components/QrPoster';
@@ -22,6 +22,96 @@ function hashNick(nick: string): number {
   let h = 0;
   for (let i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) | 0;
   return Math.abs(h);
+}
+
+function PlayerCollectingPanel({
+  players,
+  currentPlayerIdx,
+}: {
+  players: PublicPlayer[];
+  currentPlayerIdx: number;
+}) {
+  const ITEM_HEIGHT = 60;
+
+  const [displayIdx, setDisplayIdx] = useState(currentPlayerIdx);
+  const [queueOffset, setQueueOffset] = useState(0);
+  const prevIdxRef = useRef(currentPlayerIdx);
+
+  useEffect(() => {
+    if (currentPlayerIdx === prevIdxRef.current) return;
+    setQueueOffset(-ITEM_HEIGHT);
+    const timer = setTimeout(() => {
+      setQueueOffset(0);
+      setDisplayIdx(currentPlayerIdx);
+      prevIdxRef.current = currentPlayerIdx;
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [currentPlayerIdx]);
+
+  const displayCurrentPlayer = players[displayIdx] ?? null;
+  const displayQueue = [
+    ...players.slice(displayIdx + 1),
+    ...players.slice(0, displayIdx),
+  ];
+
+  if (!displayCurrentPlayer) return null;
+
+  return (
+    <div className="flex flex-col px-8 pb-8 w-1/2 overflow-hidden min-h-0">
+      <div
+        className={`flex flex-col gap-2 rounded-xl px-3 bg-white text-neutral-900 py-3 shrink-0 shadow-lg shadow-white/10 ${!displayCurrentPlayer.isConnected ? 'opacity-40' : ''}`}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 bg-neutral-900">
+            {displayCurrentPlayer.nick.charAt(0).toUpperCase()}
+          </div>
+          <span className="font-medium text-sm">{displayCurrentPlayer.nick}</span>
+          <span className="text-xs ml-auto opacity-70">🍺 {displayCurrentPlayer.sips}</span>
+        </div>
+        {displayCurrentPlayer.hand.length > 0 && (
+          <div className="flex gap-1 overflow-hidden h-40">
+            {displayCurrentPlayer.hand.map((c, i) => (
+              <Card key={i} card={c} size="md" />
+            ))}
+          </div>
+        )}
+      </div>
+      {displayQueue.length > 0 && (
+        <div className="flex-1 overflow-hidden min-h-0 pt-3">
+          <div
+            style={{
+              transform: `translateY(${queueOffset}px)`,
+              transition: queueOffset !== 0 ? 'transform 300ms ease-in-out' : 'none',
+            }}
+            className="flex flex-col gap-3"
+          >
+            {displayQueue.map((player) => {
+              const colorClass = AVATAR_COLORS[hashNick(player.nick) % AVATAR_COLORS.length];
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-2 rounded-xl px-3 h-12 bg-neutral-800 text-white shrink-0 ${!player.isConnected ? 'opacity-40' : ''}`}
+                >
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${colorClass}`}>
+                    {player.nick.charAt(0).toUpperCase()}
+                  </div>
+                  <MarqueeText text={player.nick} className="font-medium text-sm flex-1 min-w-0" />
+                  {player.hand.length > 0 && (
+                    <div className="flex gap-0.5 overflow-hidden h-7 shrink-0">
+                      {player.hand.map((c, i) => (
+                        <Card key={i} card={c} size="sm" />
+                      ))}
+                    </div>
+                  )}
+                  <span className="text-xs opacity-70 shrink-0">🍺 {player.sips}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RightCardPanel({
@@ -143,7 +233,7 @@ export default function TablePage() {
 
         {/* Lista graczy — tylko poza Etapem 1 (tam jest w lewym panelu split-layoutu) */}
         {state && state.players.length > 0 && state.gamePhase !== 'collecting' && state.gamePhase !== 'tram' && state.status !== 'ended' && (
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-3 gap-1 max-h-52 overflow-y-auto">
             {state.players.map((player) => {
               const isActive = state.status === 'playing' && player.id === currentPlayerId;
               const hasActiveDeal = state.gamePhase === 'pyramid' &&
@@ -208,46 +298,11 @@ export default function TablePage() {
         {/* Etap 1 — zbieranie kart */}
         {state?.gamePhase === 'collecting' && state.collecting && (
           <div className="flex flex-row flex-1 min-h-0 -mx-8 -mb-8 overflow-hidden">
-            {/* Lewa część — gracze z zebranymi kartami */}
-            <div className="flex flex-col gap-3 px-8 pb-8 overflow-y-auto w-1/2">
-{state.players.map((player) => {
-                const isActive = state.status === 'playing' && player.id === currentPlayerId;
-                const colorClass = AVATAR_COLORS[hashNick(player.nick) % AVATAR_COLORS.length];
-                const initial = player.nick.charAt(0).toUpperCase();
-                const hand = state.handsByPlayerId[player.id] ?? [];
-                return (
-                  <div
-                    key={player.id}
-                    className={`flex flex-col gap-2 rounded-xl px-3 transition-all duration-300 ${
-                      isActive
-                        ? 'bg-white text-neutral-900 scale-105 shadow-lg shadow-white/10 py-3'
-                        : 'bg-neutral-800 text-white py-2'
-                    } ${!player.isConnected ? 'opacity-40' : ''}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${isActive ? 'bg-neutral-900' : colorClass}`}
-                      >
-                        {initial}
-                      </div>
-                      <span className="font-medium text-sm">{player.nick}</span>
-                      <span className="text-xs ml-auto opacity-70">🍺 {player.sips}</span>
-                    </div>
-                    {hand.length > 0 && (
-                      <div
-                        className={`flex gap-1 overflow-hidden transition-[height] duration-300 ${
-                          isActive ? 'h-40' : 'h-9'
-                        }`}
-                      >
-                        {hand.map((c, i) => (
-                          <Card key={i} card={c} size={isActive ? 'md' : 'sm'} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            {/* Lewa część — aktywny gracz + kolejka (ticker) */}
+            <PlayerCollectingPanel
+              players={state.players}
+              currentPlayerIdx={state.collecting.currentPlayerIdx}
+            />
 
             {/* Prawa część — aktualna karta lub DrinkGate */}
             <RightCardPanel

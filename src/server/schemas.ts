@@ -55,7 +55,7 @@ export const tramNextSchema = z.object({}).strict();
 export const collectingConfirmSchema = z.object({}).strict();
 
 export const roomReorderPlayersSchema = z.object({
-  playerIds: z.array(z.string()).min(2).max(12),
+  playerIds: z.array(z.string()).min(2).max(18),
 });
 
 export const roomKickPlayerSchema = z.object({
