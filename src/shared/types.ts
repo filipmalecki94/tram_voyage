@@ -34,6 +34,10 @@ export interface CollectingSubState {
   pendingConfirm: string | null;
   /** Karta dobrana w bieżącej turze; null gdy tura się jeszcze nie zaczęła lub już zakończyła */
   currentCard: Card | null;
+  /** Czytelna etykieta odpowiedzi którą wybrał aktualny gracz, np. "♠♣ Czarna", "▲ Wyżej" */
+  lastGuess: string | null;
+  /** Czy ostatnia odpowiedź była poprawna; null gdy karta jeszcze nie dobrana */
+  lastGuessCorrect: boolean | null;
 }
 
 export interface PyramidPlayerDeal {

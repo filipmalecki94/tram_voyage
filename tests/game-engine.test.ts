@@ -123,7 +123,7 @@ describe('startCollecting', () => {
     const base = createGame(makePlayers(3), seededRng(1));
     const state = startCollecting(base, seededRng(2));
     expect(state.gamePhase).toBe('collecting');
-    expect(state.collecting).toEqual({ round: 1, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null });
+    expect(state.collecting).toEqual({ round: 1, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null, lastGuess: null, lastGuessCorrect: null });
   });
 
   it('czyści ręce i sips graczy', () => {
@@ -242,7 +242,7 @@ describe('collectingGuess — Runda 2', () => {
       ...state,
       deck: [topCard, ...createDeck().slice(2)],
       players,
-      collecting: { round: 2, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
+      collecting: { round: 2, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null, lastGuess: null, lastGuessCorrect: null },
     };
   }
 
@@ -280,7 +280,7 @@ describe('collectingGuess — Runda 3', () => {
       ...state,
       deck: [topCard, ...createDeck().slice(3)],
       players,
-      collecting: { round: 3, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
+      collecting: { round: 3, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null, lastGuess: null, lastGuessCorrect: null },
     };
   }
 
@@ -329,7 +329,7 @@ describe('collectingGuess — Runda 4 (symbol + tęcza)', () => {
       ...state,
       deck: [topCard, ...createDeck().slice(4)],
       players,
-      collecting: { round: 4, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
+      collecting: { round: 4, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null, lastGuess: null, lastGuessCorrect: null },
     };
   }
 

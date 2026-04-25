@@ -437,12 +437,27 @@ export default function RoomPage() {
           </p>
         );
       }
-      // Nie moja tura — brak akcji
-      if (!isMyTurn) return null;
+      // Nie moja tura — info o turze (+ odpowiedź gdy już dobrana)
+      if (!isMyTurn) {
+        const currentPlayer = state.players[col.currentPlayerIdx];
+        return (
+          <div className="flex flex-col gap-1">
+            <p className="text-center text-xl py-1">
+              Tura: <strong>{currentPlayer?.nick ?? '...'}</strong>
+            </p>
+            <p className="text-center text-sm text-muted-foreground min-h-[1.25rem]">
+              {col.lastGuess ? <>Odpowiedź: <strong>{col.lastGuess}</strong></> : null}
+            </p>
+          </div>
+        );
+      }
 
-      // Moja tura — siatka wyboru + przycisk "Ciągnij kartę"
+      // Moja tura — "Twoja tura!" + siatka wyboru + "Ciągnij kartę"
       return (
         <div className="flex flex-col gap-3">
+          <p className="text-center text-sm text-muted-foreground font-medium">
+            Twoja tura! Wybierz odpowiedź:
+          </p>
           {col.round === 1 && (
             <div className="grid grid-cols-2 gap-3">
               {(['black', 'red'] as const).map((v) => {
@@ -795,24 +810,25 @@ export default function RoomPage() {
         </p>
       )}
 
-      {/* Etap 1 — Zbieranie (tylko info o turze) */}
-      {state.gamePhase === 'collecting' && (() => {
-        const col = state.collecting;
-        if (!col) return <p className="text-center text-muted-foreground py-4">Ładowanie…</p>;
-        const isMyTurn = state.players[col.currentPlayerIdx]?.id === myPlayerId;
-        const currentPlayer = state.players[col.currentPlayerIdx];
 
-        if (!isMyTurn) {
-          return (
-            <p className="text-center text-xl py-4">
-              Tura: <strong>{currentPlayer?.nick ?? '...'}</strong>
-            </p>
-          );
-        }
+      {/* Etap 1 — Zbieranie (karta) */}
+      {state.gamePhase === 'collecting' && state.collecting && (() => {
+        const col = state.collecting;
+        const cardRing =
+          col.lastGuessCorrect === true
+            ? 'ring-4 ring-emerald-500 rounded-xl'
+            : col.lastGuessCorrect === false
+              ? 'ring-4 ring-red-500 rounded-xl'
+              : '';
         return (
-          <p className="text-center text-sm text-muted-foreground font-medium pt-2">
-            Twoja tura! Wybierz odpowiedź:
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <div className={cardRing}>
+              {col.currentCard
+                ? <Card card={col.currentCard} size="lg" />
+                : <Card faceDown size="lg" />
+              }
+            </div>
+          </div>
         );
       })()}
 

@@ -83,7 +83,7 @@ export function startCollecting(state: GameState, rng: RNG): GameState {
     players: state.players.map((p) => ({ ...p, hand: [], sips: 0 })),
     status: 'playing',
     gamePhase: 'collecting',
-    collecting: { round: 1, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null },
+    collecting: { round: 1, currentPlayerIdx: 0, pendingConfirm: null, currentCard: null, lastGuess: null, lastGuessCorrect: null },
     pyramid: null,
     tram: null,
     winnerId: null,
@@ -188,6 +188,8 @@ export function advanceCollecting(state: GameState): GameState {
         currentPlayerIdx: 0,
         pendingConfirm: null,
         currentCard: null,
+        lastGuess: null,
+        lastGuessCorrect: null,
       },
       currentTurnPlayerId: state.players[0].id,
     };
@@ -199,6 +201,8 @@ export function advanceCollecting(state: GameState): GameState {
         currentPlayerIdx: nextPlayerIdx,
         pendingConfirm: null,
         currentCard: null,
+        lastGuess: null,
+        lastGuessCorrect: null,
       },
       currentTurnPlayerId: state.players[nextPlayerIdx].id,
     };
@@ -231,6 +235,20 @@ export function collectingConfirm(state: GameState, playerId: string): GameState
  * Gdy gracz(e) muszą pić — ustawia drinkGate zamiast natychmiast zmieniać sips.
  * Postęp gry jest wstrzymany do czasu potwierdzenia picia przez wszystkich (confirmDrink).
  */
+const SUIT_GUESS_LABELS: Record<Suit, string> = {
+  spades: '♠ Pik',
+  clubs: '♣ Trefl',
+  diamonds: '♦ Karo',
+  hearts: '♥ Kier',
+};
+
+function guessLabel(guess: CollectingGuess): string {
+  if (guess.kind === 'color') return guess.value === 'black' ? '♠♣ Czarna' : '♥♦ Czerwona';
+  if (guess.kind === 'hiLo') return guess.value === 'higher' ? '▲ Wyżej' : '▼ Niżej';
+  if (guess.kind === 'inOut') return guess.value === 'inside' ? 'Pomiędzy' : 'Poza';
+  return SUIT_GUESS_LABELS[guess.value];
+}
+
 export function collectingGuess(
   state: GameState,
   playerId: string,
@@ -271,7 +289,7 @@ export function collectingGuess(
     deck: remainingDeck,
     drawnCards: [...state.drawnCards, card],
     players: updatedPlayers,
-    collecting: state.collecting ? { ...state.collecting, currentCard: card } : null,
+    collecting: state.collecting ? { ...state.collecting, currentCard: card, lastGuess: guessLabel(guess), lastGuessCorrect: correct } : null,
   };
 
   if (rainbowTriggered) {
