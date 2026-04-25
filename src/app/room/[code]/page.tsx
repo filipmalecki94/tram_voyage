@@ -603,10 +603,13 @@ export default function RoomPage() {
                 <Button
                   key={p.id}
                   variant="outline"
-                  className="h-12"
+                  className="h-12 px-2 overflow-hidden"
                   onClick={() => handlePyramidAssign(p.id, 1)}
                 >
-                  {p.nick}{p.id === myPlayerId ? ' (ty)' : ''}
+                  <MarqueeText
+                    text={`${p.nick}${p.id === myPlayerId ? ' (ty)' : ''}`}
+                    className="w-full text-sm"
+                  />
                 </Button>
               ))}
             </div>
