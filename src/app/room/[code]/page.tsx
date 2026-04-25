@@ -222,7 +222,7 @@ export default function RoomPage() {
 
   const handleJoin = useCallback(async () => {
     const nick = joinNick.trim();
-    if (nick.length < 2 || nick.length > 16) return;
+    if (nick.length < 2 || nick.length > 30) return;
     setJoining(true);
     try {
       const res = await emit('room:join', { code, nick });
@@ -336,7 +336,7 @@ export default function RoomPage() {
             onChange={(e) => setJoinNick(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             placeholder="np. Ala"
-            maxLength={16}
+            maxLength={30}
             className="h-12 rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <Button

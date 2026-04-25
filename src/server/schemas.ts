@@ -2,12 +2,12 @@ import { z } from 'zod';
 import type { Result } from '@/shared/socket-events';
 
 export const roomCreateSchema = z.object({
-  nick: z.string().min(1).max(20),
+  nick: z.string().min(1).max(30),
 });
 
 export const roomJoinSchema = z.object({
   code: z.string().length(6),
-  nick: z.string().min(1).max(20),
+  nick: z.string().min(1).max(30),
 });
 
 export const roomRejoinSchema = z.object({

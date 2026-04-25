@@ -15,7 +15,7 @@ export default function Page() {
   const [loading, setLoading] = useState<'create' | 'join' | null>(null);
 
   const nickTrimmed = nick.trim();
-  const nickValid = nickTrimmed.length >= 2 && nickTrimmed.length <= 16;
+  const nickValid = nickTrimmed.length >= 2 && nickTrimmed.length <= 30;
   const codeTrimmed = joinCode.trim().toUpperCase();
 
   async function handleCreate() {
@@ -74,7 +74,7 @@ export default function Page() {
           value={nick}
           onChange={(e) => setNick(e.target.value)}
           placeholder="np. Ala"
-          maxLength={16}
+          maxLength={30}
           className="h-12 rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <p className="text-xs text-muted-foreground">Potrzebny do stworzenia stołu i dołączenia do gry.</p>
