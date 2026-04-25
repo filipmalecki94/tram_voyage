@@ -35,19 +35,13 @@ export function ActivePlayerFan({ hand }: Props) {
       aria-label="Ręka aktywnego gracza"
     >
       <div className="absolute inset-x-0 top-0 flex justify-center items-start">
-        {cards ? cards.map((c, i) => (
+        {cards && cards.map((c, i) => (
           <div key={`peek-${c.suit}-${c.rank}-${i}`} className="absolute" style={peekStyle(i, cardCount)}>
             <div style={{ transform: 'rotate(180deg)' }}>
               <Card card={c} size="sm" />
             </div>
           </div>
-        )) : (
-          <div className="absolute" style={peekStyle(0, 1)}>
-            <div style={{ transform: 'rotate(180deg)' }}>
-              <Card faceDown size="sm" />
-            </div>
-          </div>
-        )}
+        ))}
       </div>
     </div>
   );

@@ -710,7 +710,7 @@ export default function RoomPage() {
       {/* Header */}
       <div className="pt-2">
         <p className="text-xs text-muted-foreground uppercase tracking-widest">Kod pokoju</p>
-        <h1 className="text-4xl font-bold font-mono tracking-widest">{state.code}</h1>
+        <h1 className="text-xl font-bold font-mono tracking-widest">{state.code}</h1>
         {state.gamePhase === 'collecting' && (
           <p className="text-sm text-muted-foreground">
             Etap 1{state.collecting ? ` — Runda ${state.collecting.round}/4` : ''}
@@ -807,8 +807,9 @@ export default function RoomPage() {
       {/* Ręka aktywnego gracza — peek z dołu listy graczy (etap 1) */}
       {state.gamePhase === 'collecting' && state.collecting && (() => {
         const activePlayer = state.players[state.collecting.currentPlayerIdx];
-        if (!activePlayer || activePlayer.id === myPlayerId) return null;
-        const activeHand = state.handsByPlayerId[activePlayer.id] ?? [];
+        if (!activePlayer) return null;
+        if (activePlayer.id === myPlayerId) return <ActivePlayerFan hand={[]} />;
+        const activeHand = sortHand(state.handsByPlayerId[activePlayer.id] ?? []);
         return <ActivePlayerFan hand={activeHand} />;
       })()}
 
