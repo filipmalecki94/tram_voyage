@@ -613,19 +613,20 @@ export default function RoomPage() {
                 </Button>
               ))}
             </div>
-            {pendingMyDrink && (
-              <Button
-                className="h-14 text-xl w-full mt-1 bg-amber-500 hover:bg-amber-600 text-white"
-                onClick={handleConfirmDrink}
-              >
-                Wypiłem 🍺 {myEntry!.sips}
-              </Button>
-            )}
-            {myEntry?.confirmed && (
-              <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
-                ✓ Wypiłem — czekamy na innych
-              </p>
-            )}
+            <div className="h-14 mt-1">
+              {pendingMyDrink ? (
+                <Button
+                  className="h-14 text-xl w-full bg-amber-500 hover:bg-amber-600 text-white"
+                  onClick={handleConfirmDrink}
+                >
+                  Wypiłem 🍺 {myEntry!.sips}
+                </Button>
+              ) : myEntry?.confirmed ? (
+                <p className="h-14 flex items-center justify-center text-center text-emerald-500 font-medium">
+                  ✓ Wypiłem — czekamy na innych
+                </p>
+              ) : null}
+            </div>
           </div>
         );
       }
@@ -710,7 +711,7 @@ export default function RoomPage() {
   const actionZoneContent = renderActionZone();
 
   return (
-    <main className="w-full min-h-screen flex flex-col p-4 gap-4 max-w-md mx-auto pb-[420px]">
+    <main className="w-full h-dvh overflow-hidden flex flex-col p-4 gap-4 max-w-md mx-auto">
       {/* Header */}
       <div className="pt-2">
         <p className="text-xs text-muted-foreground uppercase tracking-widest">Kod pokoju</p>
